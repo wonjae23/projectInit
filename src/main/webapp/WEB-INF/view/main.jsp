@@ -14,7 +14,7 @@
 	<c:import url="/left.do"/> 
 		<div id="content">
 			<div class="hgroup">
-			<h3>메인페이지</h3>
+			<h3>메인페이지1</h3>
 		</div>
 <style type="text/css">
 table.basic_top{width:100%;border-top:1px solid #b7c8c5;margin-top:20px}table.basic_top th{background:#daf6f0;color:#666}table.basic_top th,td{text-align:center}table.basic_top th,table.basic_top td{border-bottom:1px solid #b7c8c5;border-left:1px solid #b7c8c5;padding:8px}table.basic_top th:first-child,table.basic_top td:first-child,table.basic_top .leftnone{border-left:0}table.basic_top .subtitle th{background:#c5d9d5}table.basic_top .month{background:#0aa586;color:#fff}table.basic_top th.leftline{border-left:1px solid #b7c8c5}table.basic_top .btn{font-weight:700;font-size:2em;background:#fff}table.basic_top .btn a{color:#333}table.basic_top .btn a:hover{color:#0b6b58;text-decoration:none}table.basic_top th.btn:hover{background:#f7f7f7}ul.mainbox{margin:20px 0 0;clear:both}ul.mainbox li.left{float:left;width:41%}ul.mainbox li.right{float:right;width:56%}ul.mainbox table.floatL{float:left;width:65%}ul.mainbox table.floatR{float:right;width:33%}table.basic td.subtitle{font-weight:700;background:#fafafa}
