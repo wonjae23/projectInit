@@ -16,7 +16,7 @@
 	<form name="frmInsert"  method="POST" action="loginOk.do">
 		<div class="login">
 			<p>
-				<label for="">아이디</label>
+				<label for="">아이디1</label>
 				<input type="text" name="LOGINID" id="LOGINID" value="" required  maxlength="30"/><!-- !!주의!! 아이디 패스워드 입력해서 SVN 및 개발서버 업로드 금지 -->
 			</p>
 			<p>
