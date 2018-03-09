@@ -1,0 +1,118 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+ 	   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  	   xmlns:p="http://www.springframework.org/schema/p" 
+  	   xmlns:context="http://www.springframework.org/schema/context"
+  	   xmlns:mvc="http://www.springframework.org/schema/mvc"
+  	   xmlns:tx="http://www.springframework.org/schema/tx"
+       xmlns:task="http://www.springframework.org/schema/task"
+       xmlns:util="http://www.springframework.org/schema/util"       	
+       xmlns:aop="http://www.springframework.org/schema/aop"
+       xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-3.1.xsd
+                           http://www.springframework.org/schema/context http://www.springframework.org/schema/context/spring-context-3.1.xsd
+						   http://www.springframework.org/schema/task http://www.springframework.org/schema/task/spring-task-3.1.xsd
+						   http://www.springframework.org/schema/util http://www.springframework.org/schema/util/spring-util-3.1.xsd
+						   http://www.springframework.org/schema/tx http://www.springframework.org/schema/tx/spring-tx-3.1.xsd
+						   http://www.springframework.org/schema/mvc http://www.springframework.org/schema/mvc/spring-mvc-3.1.xsd
+						   http://www.springframework.org/schema/aop http://www.springframework.org/schema/aop/spring-aop-3.1.xsd">
+	
+	<context:annotation-config />
+    <context:component-scan base-package="com.epasskorea.bms">    	
+    </context:component-scan>
+	
+	<!-- Aspect annotation setting for AOP : annotation auto proxy 설정이 bean 정의보다 먼저 위치해야지 함 -->	
+	<aop:aspectj-autoproxy/> 	
+				
+
+	<!-- Controller Interceptor
+    <mvc:interceptors>
+    	<bean class="com.epasskorea.bms.interceptor.LoginAuthInterceptor"/>	
+		<bean class="com.epasskorea.bms.interceptor.BmsMenuInterceptor"/>		
+    </mvc:interceptors>-->
+        
+    <!-- CommandMapArgumentResolver 설정 : commandMap 이라는 parameter에 넘어오는 모든 parameter를 setting 해주는 역할.-->
+	<bean class="org.springframework.web.servlet.mvc.annotation.AnnotationMethodHandlerAdapter">
+        <property name="webBindingInitializer">
+            <bean class="com.epasskorea.groupware.common.EgovBindingInitializer"/>            
+        </property>
+        <property name="customArgumentResolvers">
+            <list>
+                <bean class="egovframework.rte.ptl.mvc.bind.CommandMapArgumentResolver"/>
+            </list>
+        </property>
+        <!-- @ResponseBody josn 전달시 한글 깨짐 처리 -->
+        <property name="messageConverters">
+	      <list>
+	         <bean class = "org.springframework.http.converter.StringHttpMessageConverter">
+	            <property name = "supportedMediaTypes">
+	               <list>
+	                  <value>text/plain;charset=UTF-8</value>
+	               </list>
+	            </property>
+	         </bean>
+	      </list>
+	   </property>
+    </bean>
+    
+    <!-- static resource(html, js, css)에 대한 요청처리를 servlet container의 default servlet으로 처리
+    <mvc:default-servlet-handler/> -->
+    
+    <!-- Enable mvc:annotation-driven to support object conversion to/from JSON format 
+    <mvc:annotation-driven/> -->	 
+	    
+    <!--
+       - This bean resolves specific types of exceptions to corresponding logical 
+       - view names for error views. The default behaviour of DispatcherServlet 
+       - is to propagate all exceptions to the servlet container: this will happen 
+       - here with all other types of exceptions.	
+    <bean id="exceptionMapping" class="com.epasskorea.bms.exception.CommonExceptionResolver" scope="prototype" >		   
+	    <property name="exceptionMappings">
+            <props>            	
+            	<prop key="java.lang.Exception">error/error</prop>
+                <prop key="org.springframework.dao.DataAccessException">error/error</prop>
+                <prop key="org.springframework.transaction.TransactionException">error/error</prop>                
+                <prop key="org.springframework.security.AccessDeniedException">error/error</prop>
+                <prop key="org.springframework.transaction.TransactionException">error/error</prop>                
+                <prop key="org.springframework.security.AccessDeniedException">error/error</prop>
+                <prop key="com.epasskorea.bms.exception.OperatorAuthException">error/error_auth</prop>
+                <prop key="com.epasskorea.bms.exception.MenuPermitException">error/error_permit</prop>
+               
+            </props>
+        </property>
+        <property name="defaultErrorView" value="error/error"/>
+    </bean>		-->	
+        
+    <!--
+        - This bean configures the 'prefix' and 'suffix' properties of 
+        - InternalResourceViewResolver, which resolves logical view names 
+        - returned by Controllers. For example, a logical view name of "vets" 
+        - will be mapped to "/WEB-INF/view/vets.jsp".
+    -->
+    <bean class="org.springframework.web.servlet.view.InternalResourceViewResolver">
+    	<property name="viewClass" value="org.springframework.web.servlet.view.JstlView" />
+		<property name="prefix" value="/WEB-INF/view/" />
+		<property name="suffix" value=".jsp" />
+		<property name="order" value="1"/> 
+		<property name="contentType" value="text/html; charset=UTF-8"/>
+	</bean>
+	
+	<!-- LMS 기본 transaction Manager 설정 -->
+	<bean id="txLMSManager" class="org.springframework.jdbc.datasource.DataSourceTransactionManager">		
+		<property name="dataSource" ref="dataSourceLMS"/>
+	</bean>	
+	<tx:annotation-driven transaction-manager="txLMSManager"/>
+	
+	<!-- file upload multipart resolver -->
+	<bean id="multipartResolver" class="org.springframework.web.multipart.commons.CommonsMultipartResolver">
+  		<property name="maxUploadSize" value="5120000"/>  	
+  		<property name="defaultEncoding" value="UTF-8"/>  		
+  	</bean>
+  	
+  	<!-- file download viewresolver --> 
+	<bean class="org.springframework.web.servlet.view.BeanNameViewResolver">
+		<property name="order" value="0"/>
+	</bean>
+  	  	         
+    <!-- bms menu auth advisor
+    <bean id="bmsMenuAuthAdvisor" class="com.epasskorea.bms.aop.advisor.BmsMenuAuthAdvisor"/>  -->
+</beans>						        

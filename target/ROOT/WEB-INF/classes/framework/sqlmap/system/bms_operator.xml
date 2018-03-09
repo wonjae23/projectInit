@@ -1,0 +1,570 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="bmsOperator">
+	
+	<!-- GroupWare Member Search common where  -->
+	<sql id="gwMemberSearchWhere">	
+		<if test="AD_NAME !=null and AD_NAME != '' " >		
+			AND Name LIKE '%' + #{AD_NAME} + '%'			
+		</if>
+		<if test="gpName !=null and gpName != '' " >
+			AND gpName = #{gpName}
+		</if>
+	</sql>	
+	
+	<!-- operator search common where  -->
+	<sql id="operatorSearchWhere">		
+		<if test="AD_NAME !=null and AD_NAME != ''" >
+			<choose>
+				<when test="searchHead =='Y' ">
+					AND AD_NAME LIKE #{AD_NAME}+'%'
+				</when>
+				<otherwise>
+					AND AD_NAME LIKE '%'+#{AD_NAME}+'%'
+				</otherwise>
+			</choose>	
+		</if>
+		
+		<if test="AG_IDX !=null and AG_IDX != '' " >
+			<if test="AG_IDX == 0 ">
+				AND AM.AG_IDX IS NULL
+			</if>
+			<if test="AG_IDX != 0 ">
+				AND AM.AG_IDX=#{AG_IDX}
+			</if>
+		
+		</if>
+		
+		<if test="SEARCHKEYWORD != '' and SEARCHKEYWORD != null">
+			AND ( AD_NAME LIKE '%'+#{SEARCHKEYWORD}+'%' OR GMT.USERID LIKE '%'+#{SEARCHKEYWORD}+'%' ) 
+		</if>
+	</sql>	
+	
+	<sql id="operatorSearchIpWhere">
+		<if test="S1 != '' and S1 != null">
+			AND IE_IP = #{S2}
+		</if>
+		
+		<if test="IE_IP != '' and IE_IP != null">
+			AND IE_IP = #{IE_IP}
+		</if>
+	</sql>
+	
+	
+	
+	
+	<!-- Operator loing Info select -->
+	<select id="selectOperatorLoginInfo" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+		SELECT 
+			AD_IDX, ISNULL(AG_IDX,'') AS AG_IDX, ISNULL(MB_IDX,'') AS MB_IDX, 
+			AD_REGUSER, AD_REGDT, AD_NAME, AD_EMAIL, AD_TEL, MemberID, UserPWD, UserID, UserIDenc ,
+			CPHONE
+		FROM BM_ADMIN AS AM WITH(NOLOCK)
+		INNER JOIN 
+			(
+				SELECT UserID, MASTER.dbo.fn_DESEncrypt(UserID) as UserIDenc, MASTER.dbo.fn_DESDecrypt(UserPWD) as UserPWD,
+				 MemberID, CPHONE
+				FROM GW_SVR.GROUPWARE.dbo.Member_Tab
+				WHERE UserID=#{LOGINID}
+			) AS GM
+		ON AM.AD_IDX=GM.MemberID	
+	</select>
+	
+	<!-- admin list count -->
+	<select id="selectOperatorListCount" parameterType="java.util.HashMap" resultType="int">
+		<![CDATA[
+			SELECT 
+				COUNT(AD_IDX) AS AD_COUNT
+			FROM BM_ADMIN AS AM WITH(NOLOCK)
+				LEFT OUTER JOIN BM_ADMINGROUP AS AG WITH(NOLOCK)
+				ON AM.AG_IDX=AG.AG_IDX
+				LEFT OUTER JOIN GW_SVR.GROUPWARE.DBO.MEMBER_TAB GMT ON AM.AD_IDX = GMT.MEMBERID
+			WHERE 1=1
+		]]>
+		  <include refid="operatorSearchWhere"/>
+	</select>
+	
+	<!-- admin list -->
+	<select id="selectOperatorList" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+<![CDATA[
+			SELECT
+				*
+			FROM 
+			(
+				SELECT 
+					ROW_NUMBER() OVER(ORDER BY AD_REGDT DESC) AS ROWNUM
+					,AD_IDX,GMT.USERID,AD_REGUSER,AD_REGDT,AD_NAME,AD_EMAIL,AD_TEL, AD_PERMIT
+					,AM.AG_IDX,AG.AG_NAME,AG.AG_DESC
+					,AD_NOTLOGIN , AD_FAILLOGIN
+				FROM BM_ADMIN AS AM WITH(NOLOCK)
+					LEFT OUTER JOIN BM_ADMINGROUP AS AG WITH(NOLOCK)
+					ON AM.AG_IDX=AG.AG_IDX
+					LEFT OUTER JOIN GW_SVR.GROUPWARE.DBO.MEMBER_TAB GMT ON AM.AD_IDX = GMT.MEMBERID
+				WHERE 1=1
+		]]>
+			 <include refid="operatorSearchWhere"/>
+		<![CDATA[
+				) AS TT
+		WHERE TT.ROWNUM BETWEEN #{beginNum} AND #{endNum}
+		]]>
+</select>
+	
+	
+	<!-- GROUPWARE MEMBER GROUP LIST -->
+	<select id="selectGWMemberGPList" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+		SELECT			
+			gpName
+		FROM GW_SVR.GROUPWARE.dbo.Member_View 
+		WHERE (UserID IS NOT NULL)
+		GROUP BY gpName
+	</select>
+	
+	<!-- GROUPWARE MEMBER List Count -->
+	<select id="selectGWMemberListCount" parameterType="java.util.HashMap" resultType="int">
+		<![CDATA[
+			SELECT
+				count(idx) as AD_COUNT
+			FROM GW_SVR.GROUPWARE.dbo.Member_View
+			WHERE (UserID IS NOT NULL)
+			AND MemberID NOT IN (SELECT AD_IDX FROM BM_ADMIN)
+		]]>
+		  <include refid="gwMemberSearchWhere"/>
+	</select>
+	
+	<!-- GROUPWARE MEMBER List -->
+	<select id="selectGWMemberList" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+		<![CDATA[
+		SELECT
+			*
+		FROM 
+		(
+			SELECT
+				ROW_NUMBER() OVER(ORDER BY Name ASC) AS ROWNUM     
+				,INNERYN, gpCode, gpComNum, dcode, tcode, idx, rcode, ctg, UserID, rduty, rposition, rSortNo, Seniority, superior, 
+			    gpName, logoImage, dptName, 
+			    teamName, positionName, dutyName, gpSortNo, dSortNo, tSortNo, MemberID AS adminidx, Name, UserPWD AS  
+			    adminpwd, mobile, phone, email, 
+			    recruit, MSN, nateON, cphone, sabun, WeddingDay, WeddingType, birthday, birthctg			    
+			FROM GW_SVR.GROUPWARE.dbo.Member_View
+			WHERE (UserID IS NOT NULL)
+			AND MemberID NOT IN (SELECT AD_IDX FROM BM_ADMIN)
+		]]>
+		<include refid="gwMemberSearchWhere"/>
+		<![CDATA[
+		) AS TT
+		WHERE TT.ROWNUM BETWEEN #{beginNum} AND #{endNum}
+		]]>
+	</select>
+	
+	<!-- Operator insert -->
+	<insert id="insertOperator" parameterType="java.util.HashMap">
+		INSERT INTO BM_ADMIN
+		(AD_IDX, AD_REGUSER, AD_REGDT, AD_NAME, AD_EMAIL, AD_TEL)		
+		SELECT
+			MemberID,#{AD_REGUSER},GETDATE(),Name,email,cphone			
+		FROM GW_SVR.GROUPWARE.dbo.Member_Tab
+		WHERE MemberID = #{AD_IDX}	
+	</insert>
+	
+	<!-- Operator Info select -->
+	<select id="selectOperatorInfo" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+		SELECT 
+			AD_IDX, AD_REGUSER, AD_REGDT, AD_NAME, AD_EMAIL, AD_TEL
+		FROM BM_ADMIN 
+		WHERE AD_IDX=#{AD_IDX}
+	</select>
+	
+	<!-- Operator Group Update -->
+	<update id="updateOperatorGroup" parameterType="java.util.HashMap">
+		UPDATE BM_ADMIN SET
+		AG_IDX=#{AG_IDX}
+		WHERE AD_IDX=#{AD_IDX}
+	</update>
+	
+	<!-- operator group delete  -->
+	<update id="deleteOperatorGroup" parameterType="java.util.HashMap">
+		UPDATE BM_ADMIN SET
+	   		AG_IDX = NULL
+		WHERE AD_IDX IN 
+        <foreach item="item" collection="AD_IDXS"  index="index" separator="," open="(" close=")">
+	     		 #{item}
+	     </foreach>
+	</update>	
+	
+	<!-- delete operator -->
+	<delete id="deleteOperator">
+	  
+		DELETE FROM BM_ADMIN
+		WHERE AD_IDX IN 
+		 <foreach item="item" collection="AD_IDX"  index="index" separator="," open="(" close=")">
+	     		 #{item}
+	     </foreach>
+	</delete>
+	
+	<!-- 운영자 담당 사이트 목록 -->
+	<select id="selectOperatorSite" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+		SELECT 
+			ST.ST_CODE,ST.ST_NAME,ST.CD_SYSGRP,ST.ST_OPUSER,ST.ST_MKUSER
+			,ST.ST_DOMAIN,ST.ST_HOST,ST.ST_STATUS,ST.ST_USEYN
+			,A1.Name AS ST_OPUSERNM				
+			,A2.Name AS ST_MKUSERNM	
+		FROM BM_ADMINSITE AS ADS WITH(NOLOCK)
+		INNER JOIN BB_SITE AS ST WITH(NOLOCK)
+		ON ADS.ST_CODE=ST.ST_CODE
+		LEFT OUTER JOIN GW_SVR.GROUPWARE.dbo.Member_tab A1 ON ST.ST_OPUSER = A1.MemberID
+		LEFT OUTER JOIN GW_SVR.GROUPWARE.dbo.Member_tab A2 ON ST.ST_MKUSER = A2.MemberID
+		WHERE ADS.AD_IDX=#{AD_IDX}
+	</select>
+	
+	<!-- 운영자 담당 사이트 등록 -->
+	<insert id="insertOperatorSite" parameterType="java.util.HashMap">
+		INSERT INTO BM_ADMINSITE
+		(AD_IDX,ST_CODE) VALUES (#{AD_IDX},#{ST_CODE})
+	</insert>
+	
+	<!-- 운영자 담당 사이트 삭제 -->
+	<delete id="deleteOperatorSite" parameterType="java.util.HashMap">
+		DELETE FROM BM_ADMINSITE WHERE AD_IDX=#{AD_IDX} AND ST_CODE=#{ST_CODE}
+	</delete>
+	
+	<!-- 운영자 담당 사이트 삭제 후 관리자 기록 남기기 위해
+	 -->
+	<select id="selectOperatorSiteAll" parameterType="java.util.HashMap" resultType="String">
+		SELECT			  
+			  STUFF((
+			    SELECT ', ' + a1.ST_CODE        FROM BM_ADMINSITE a1
+			     WHERE (a1.AD_IDX = a.AD_IDX) 
+			        FOR XML PATH ('')) ,1,2,'') AS ST_CODES
+			FROM BM_ADMINSITE a
+			GROUP BY AD_Idx
+			HAVING AD_IDX = #{AD_IDX}	
+	</select>	
+	
+	
+	<!-- 운영자 등록 사용자 -->
+	<select id="selectOperatorMemberInfo" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+		SELECT 
+			AD.AD_IDX,	AD.AG_IDX,	AD.AD_REGUSER,	AD.AD_REGDT,
+			AD.MB_IDX,	AD.AD_NAME,	AD_EMAIL,	AD.AD_TEL,
+			MB.MB_NAME, MB.MB_ID, MB.MB_EMAIL 
+		FROM BM_ADMIN AD
+		INNER JOIN BM_MEMBER MB ON AD.MB_IDX = MB.MB_IDX AND MB.MB_IDX > 1020000
+		AND CD_MEMST = 'MEMST01'
+		WHERE AD.AD_IDX = #{AD_IDX}
+	</select>
+	
+	<!-- 사용자 등록 -->
+	<update id="updateOperatorMember" parameterType="java.util.HashMap">
+		UPDATE BM_ADMIN SET
+		MB_IDX=#{MB_IDX}
+		WHERE AD_IDX=#{AD_IDX}
+	</update>
+	
+	
+	<!-- 사용자 삭제 -->
+	<update id="deleteOperatorMember" parameterType="java.util.HashMap">
+		UPDATE BM_ADMIN SET
+		MB_IDX = NULL
+		WHERE AD_IDX=#{AD_IDX}
+	</update>
+	
+	<!-- admin login history insert -->
+	<insert id="insertBmsLoginHis" parameterType="java.util.HashMap">
+		INSERT INTO BM_ADMINLOGINHIS
+			(MB_IDX, ST_CODE, AH_SYSGBN, AH_DT, AH_IP, AH_YN, AH_ID, AH_CERTYN 
+			<if test="AH_PWD != ''">
+				,AH_PWD
+			</if>
+		)VALUES(
+			#{MB_IDX}, #{ST_CODE}, #{AH_SYSGBN}, GETDATE(), #{AH_IP}, #{AH_YN}, #{AH_ID}, #{AH_CERTYN}
+			<if test="AH_PWD != ''">
+				,master.dbo.fn_DESEncrypt(#{AH_PWD})
+			</if>
+			)
+	</insert>
+	<!-- 장기미사용자 체크 -->
+	<select id="selectLongNotBmsLogin" parameterType="java.util.HashMap" resultType="String">
+		DECLARE @NOTLOGINYN CHAR(1)
+		
+		SELECT @NOTLOGINYN= NOTLOGINYN FROM (
+			SELECT TOP 1 CASE WHEN  DATEDIFF(M,AH_DT,GETDATE()) >3  THEN 'Y' ELSE 'N' END NOTLOGINYN  
+			FROM BM_ADMINLOGINHIS WITH(NOLOCK)
+			WHERE MB_IDX=#{MB_IDX} AND AH_YN='Y' ORDER BY AH_DT DESC
+		) TT
+		
+		if(@NOTLOGINYN IS NULL )
+		SET  @NOTLOGINYN='N'
+		
+		UPDATE BM_ADMIN SET AD_NOTLOGIN = @NOTLOGINYN WHERE AD_IDX = #{MB_IDX}
+				
+		
+		SELECT @NOTLOGINYN
+	</select>
+	
+	<!-- 장기미사용자 해제 -->
+	<update id="updateNotBmsLogin" parameterType="java.util.HashMap">
+		UPDATE BM_ADMIN SET AD_NOTLOGIN = #{NLSTATUS} WHERE AD_IDX = #{AD_IDX} 
+		
+		UPDATE BM_ADMINLOGINHIS SET AH_DT = GETDATE() WHERE AH_IDX =( 
+		SELECT TOP 1 AH_IDX FROM BM_ADMINLOGINHIS WITH(NOLOCK) WHERE MB_IDX= #{AD_IDX} AND AH_YN='Y' ORDER BY AH_DT DESC
+		) 	
+	</update>
+	
+	
+	<!-- 로그인실패회수 조회 -->
+	<select id="selectFailBmsLogin" parameterType="java.util.HashMap" resultType="integer">
+			SELECT AD_FAILLOGIN FROM BM_ADMIN WITH(NOLOCK) 
+			WHERE AD_IDX=#{AD_IDX}
+			
+	</select>
+	
+	<!-- 로그인실해횟수 셋팅 -->
+	<update id="updateFailBmsLogin" parameterType="java.util.HashMap">
+		UPDATE BM_ADMIN SET AD_FAILLOGIN = #{FAILCNT} WHERE AD_IDX = #{AD_IDX}		 	
+	</update>
+		
+	<update id="updatePermitter" parameterType="java.util.HashMap" >
+			
+		UPDATE BM_ADMIN SET AD_PERMIT = #{AD_PERMIT} WHERE AD_IDX = #{AD_IDX}
+	<!-- 	<isEqual property="AD_PERMIT" compareValue="Y">			
+		<![CDATA[
+		UPDATE BB_ADMIN SET AD_PERMIT = 'N' WHERE AD_IDX <> #AD_IDX#
+		]]>
+		</isEqual>		 -->	
+	</update>
+	
+	<!-- 관리자등록로그 -->
+	<insert id="insertBmsCreateHis" parameterType="java.util.HashMap">
+		INSERT INTO BM_ADMINCREATEHIS (AD_IDX, CD_CODE, AC_VAL,ADC_IDX) 
+		VALUES(#{ADMIN_IDX},#{CD_CODE},#{AC_VAL},#{AD_REGUSER})
+	</insert>
+	<insert id="insertGroupAuthHis" parameterType="java.util.HashMap">
+	
+		INSERT INTO BM_ADMINGRPAUTHHIS (AG_IDX, AM_IDX, AA_ASIGN,AA_ENTR,AA_EDIT,AA_DEL,AA_EXCL,AU_REGUSER)
+		VALUES(#{AG_IDX},#{AM_IDX}, #{AA_ASIGN},#{AA_ENTR},#{AA_EDIT},#{AA_DEL},#{AA_EXCL},#{AA_REGUSER})
+	
+	</insert>
+	
+	<!-- 본인인증여부 체크 -->
+	<select id="BmsCheckByDI" parameterType="java.util.HashMap" resultType="java.util.HashMap">				
+		SELECT AD_IDX, AC_DI
+		FROM BM_ADMINCERT WITH(NOLOCK)
+		WHERE <!-- AC_DI=#DI# -->
+		AD_IDX = #{AD_IDX}
+	</select>
+	
+	<!-- 보안인증 AdminCert 등록 -->
+	<insert id="insertBmsCertInfo" parameterType="java.util.HashMap">
+		INSERT INTO BM_ADMINCERT
+		(AD_IDX,CD_MBCTKIND,AC_AUTHTYPE,AC_DCRTIME,AC_RESCD,AC_IPIN,AC_DI,AC_CI,AC_GENDER,AC_BIRTH,AC_NATION,
+		AC_REGDT)
+		VALUES
+		(#{AD_IDX},#{METHOD},#{AUTH_TYPE},#{CLPHER_TIME},#{RES_SEQ},#{IPIN_NUM},#{AC_DI},#{AC_CI},#{GENDER},#{BIRTHDATE},#{NATIONALINFO},
+		GETDATE())
+	</insert>
+
+	<!-- 운영자 IP 관리 리스트 -->
+	<select id="selectIpManagerList" parameterType="java.util.HashMap"  resultType="java.util.HashMap">
+		SELECT
+		*
+		FROM
+		(
+			SELECT
+			Row_Number() Over(Order by A.IE_IDX DESC) AS RowNum
+				,* FROM (
+			Select
+				A.IE_IDX,A.IE_SYSGBN,A.IE_USERIDX,A.IE_IP,A.IE_COMMENT
+				,A.IE_REGUSER,A.IE_REGDT, A.IE_EDITDT, IE_EDITUSER, IE_STATUS
+				, CASE WHEN A.IE_SYSGBN = 'B' THEN (SELECT AD_NAME FROM BM_ADMIN B WHERE B.AD_IDX = A.IE_USERIDX) 
+					  END AS USER_NAME
+				  ,CASE WHEN A.IE_SYSGBN = 'B' THEN (SELECT USERID FROM BM_ADMIN B INNER JOIN GW_SVR.GROUPWARE.DBO.MEMBER_TAB MT ON B.AD_IDX=MT.MEMBERID WHERE B.AD_IDX = A.IE_USERIDX) 
+				  END AS USERID
+			From BM_IPMANAGER A
+			WHERE  A.IE_STATUS != 'N'
+			) A
+			 WHERE 1=1 
+			<if test="S1 != '' and S1 != null">
+				AND IE_IP = #{S2}
+			</if>
+		) MM
+		WHERE MM.RowNum BETWEEN #{beginNum} AND #{endNum}
+	</select>
+	<!-- 운영자 IP 관리 리스트 -->
+	
+	<!-- 운영자 IP 메인관리 리스트 -->
+	<select id="selectIpManagerListMain" parameterType="java.util.HashMap"  resultType="java.util.HashMap">
+		SELECT * FROM BM_IPMANAGER AS AL
+		INNER JOIN GW_SVR.GROUPWARE.DBO.MEMBER_TAB AS GW 
+		ON AL.IE_USERIDX = GW.MEMBERID 
+		WHERE AL.IE_SYSGBN = 'B'
+		AND GW.USERID=#{LOGINID}
+		AND AL.IE_STATUS = 'A'
+		
+	</select>
+	<!-- 운영자 IP 메인관리 리스트 -->
+	
+	<!-- 운영자 IP 관리 리스트 총 갯수 -->
+	<select id="selectIpManagerListCount" parameterType="java.util.HashMap" resultType="int">
+		Select
+			Count(*)				
+		From
+		( SELECT A.IE_IDX,A.IE_SYSGBN,A.IE_USERIDX,A.IE_IP,A.IE_COMMENT
+				,A.IE_REGUSER,A.IE_REGDT, A.IE_EDITDT, IE_EDITUSER, IE_STATUS
+				, CASE WHEN A.IE_SYSGBN = 'A' THEN (SELECT AD_NAME FROM BM_ADMIN B WHERE B.AD_IDX = A.IE_USERIDX) 
+				  END AS USER_NAME
+				  ,CASE WHEN A.IE_SYSGBN = 'A' THEN (SELECT USERID FROM BM_ADMIN B INNER JOIN GW_SVR.GROUPWARE.DBO.MEMBER_TAB MT ON B.AD_IDX=MT.MEMBERID WHERE B.AD_IDX = A.IE_USERIDX) 
+				  END AS USERID FROM BM_IPMANAGER A
+		WHERE A.IE_STATUS != 'N'
+		) A WHERE 1=1
+		<include refid="operatorSearchIpWhere"/>
+	</select>
+	<!-- 운영자 IP 관리 리스트 총 갯수 -->
+	
+	<!-- 운영자 IP 관리 삭제 : 업데이트 진행-->
+	<update id="bmsIpManagerUpdate" parameterType="java.util.HashMap">
+		UPDATE BM_IPMANAGER SET
+			 IE_STATUS=#{IE_STATUS} 
+			,IE_EDITUSER=#{ADMINIDX}
+			,IE_EDITDT = getdate()
+		Where 
+		<if test="applyTarget == 'all' ">
+			<choose>
+				<when test="modeType == 'DEL'">
+					IE_STATUS!='N'
+				</when>
+				<otherwise>
+					IE_STATUS='R'
+				</otherwise>
+			</choose>
+		</if>
+		
+	 	<if test="applyTarget == 'chk' ">
+	 		IE_IDX IN
+	 		<foreach collection="del_IDX" item="del_IDX" separator="," open="(" close=")">
+	     		 #{del_IDX}
+	    	 </foreach>
+	 	</if>
+	 	
+		
+	</update>
+	<!--운영자 IP 관리 삭제 : 업데이트 진행-->
+	
+	<!-- 운영자 IP 관리 등록-->
+	<insert id="bmsIpManagerInsert" parameterType="java.util.HashMap">
+		Insert Into BM_IPMANAGER (IE_SYSGBN,IE_USERIDX,IE_IP,IE_COMMENT,IE_STATUS,IE_REGDT,IE_REGUSER, IE_EDITDT, IE_EDITUSER) values 
+		(#{IE_SYSGBN},#{IE_USERIDX},#{IE_IP},#{IE_COMMENT}, #{IE_STATUS}, GETDATE(),#{ADMINIDX}, GETDATE(), #{ADMINIDX})
+	</insert>
+	<!-- 운영자 IP 관리 등록-->
+	
+	
+	<!-- 운영자 개인정보 관리 리스트 -->
+	<select id="bmsPersonalInfoList" parameterType="java.util.HashMap"  resultType="java.util.HashMap">
+		SELECT		
+		*
+		FROM
+		(
+			Select
+				Row_Number() Over(Order by A.PI_IDX DESC) AS RowNum
+				,A.PI_IDX,A.PI_SYSGBN,A.PI_NAME,A.PI_URL,A.PI_COMMENT,A.PI_REGDT,A.PI_REGUSER
+				,B.AD_NAME
+			From BM_PERSONALINFOLOG A
+			LEFT OUTER JOIN BM_ADMIN B ON A.PI_REGUSER = B.AD_IDX
+			WHERE 1=1 
+			<if test="SEARCH_SYSGBN != '' ">
+				AND A.PI_SYSGBN = #{SEARCH_SYSGBN}
+			</if>
+			
+			<if test="SEARCH_URL != '' ">
+				AND A.PI_URL LIKE '%$SEARCH_URL$%'
+			</if>
+
+		) MM
+		WHERE MM.RowNum BETWEEN #{beginNum} AND #{endNum}
+	</select>
+	<!-- 운영자 개인정보 관리 리스트 -->
+	
+	<!-- 운영자 개인정보 관리 리스트 총 갯수 -->
+	<select id="bmsPersonalInfoListCount" parameterType="java.util.HashMap" resultType="int">
+		Select
+			Count(*)				
+		From BM_PERSONALINFOLOG A
+		WHERE 1=1 
+		<if test="SEARCH_SYSGBN != ''">
+			AND A.PI_SYSGBN = #{SEARCH_SYSGBN}
+		</if>
+		<if test="SEARCH_URL != ''">
+			AND A.PI_URL LIKE '%$SEARCH_URL$%'
+		</if>
+	</select>
+	<!-- 운영자 개인정보 관리 리스트 총 갯수 -->
+	
+	<!-- 운영자 개인정보 관리 삭제 : 업데이트 진행
+	<update id="adminPersonalInfoUpdate" parameterType="java.util.HashMap">
+		DELETE FROM BM_PERSONALINFOLOG 
+		Where 
+ 		<isEqual property="applyTarget" compareValue="all">	/*전체삭제*/
+
+		</isEqual> 
+		<isEqual property="applyTarget" compareValue="chk">	/*선택삭제*/
+			PI_IDX IN
+			<iterate property="del_IDX" open="(" close=")" conjunction=",">
+				#del_IDX[]#
+			</iterate>
+		</isEqual>
+	</update>-->
+	<!-- 운영자 개인정보 관리 삭제 : 업데이트 진행-->
+	
+	<!-- 운영자 개인정보 관리 등록-->
+	<insert id="bmsPersonalInfoInsert" parameterType="java.util.HashMap">
+		Insert Into BM_PERSONALINFOLOG (PI_SYSGBN,PI_NAME,PI_URL,PI_COMMENT,PI_REGDT,PI_REGUSER) values 
+		(#{PI_SYSGBN},#{PI_NAME},#{PI_URL},#{PI_COMMENT},GETDATE(),#{ADMINIDX})
+	</insert>
+	<!-- 운영자 개인정보 관리 등록-->
+	
+	
+	
+	<!-- 기업담당자 장기미사용자 해제 -->
+	<update id="updateNotCompanyLogin" parameterType="java.util.HashMap">
+		UPDATE BM_SITEADMIN SET SA_NOTLOGIN = #{NLSTATUS} WHERE SA_IDX = #{SA_IDX} 
+		
+		UPDATE BM_ADMINLOGINHIS SET AH_DT = GETDATE() WHERE AH_IDX =( 
+		SELECT TOP 1 AH_IDX FROM BM_ADMINLOGINHIS WITH(NOLOCK) WHERE MB_IDX= #{SA_IDX} AND AH_YN='Y' ORDER BY AH_DT DESC
+		) 	
+	</update>	
+	
+	<!--기업담당자 로그인실해횟수 셋팅 -->
+	<update id="updateFailCompanyLogin" parameterType="java.util.HashMap">
+		UPDATE BM_SITEADMIN SET SA_FAILLOGIN = #{FAILCNT} WHERE SA_IDX = #{SA_IDX}		 	
+	</update>
+	
+	<!-- CP 장기미사용자 해제 -->
+	<update id="updateNotCpLogin" parameterType="java.util.HashMap">
+		UPDATE BM_CPADMIN SET CA_NOTLOGIN = #{NLSTATUS} WHERE CA_IDX = #{CA_IDX} 
+		
+		UPDATE BM_ADMINLOGINHIS SET AH_DT = GETDATE() WHERE AH_IDX =( 
+		SELECT TOP 1 AH_IDX FROM BM_ADMINLOGINHIS WITH(NOLOCK) WHERE MB_IDX= #{CA_IDX} AND AH_SYSGBN='V' AND AH_YN='Y' ORDER BY AH_DT DESC
+		) 	
+	</update>	
+	
+	<!--CP 로그인실해횟수 셋팅 -->
+	<update id="updateFailCpLogin" parameterType="java.util.HashMap">
+		UPDATE BM_CPADMIN SET CA_FAILLOGIN = #{FAILCNT} WHERE CA_IDX = #{CA_IDX}		 	
+	</update>
+	
+	
+	<!--튜터 로그인실해횟수 셋팅 -->
+	<update id="updateFailTutorLogin" parameterType="java.util.HashMap">
+		UPDATE BM_PROFESSOR SET PF_FAILLOGIN = #{FAILCNT} WHERE PF_IDX = #{PF_IDX}		 	
+	</update>
+	
+	<!-- 튜터 장기미사용자 해제 -->
+	<update id="updateNotTutorLogin" parameterType="java.util.HashMap">
+		UPDATE BM_PROFESSOR SET PF_NOTLOGIN = #{NLSTATUS} WHERE PF_IDX = #{PF_IDX} 
+		
+		UPDATE BM_ADMINLOGINHIS SET AH_DT = GETDATE() WHERE AH_IDX =( 
+		SELECT TOP 1 AH_IDX FROM BM_ADMINLOGINHIS WITH(NOLOCK) WHERE MB_IDX= #{PF_IDX} AND AH_YN='Y' ORDER BY AH_DT DESC
+		) 	
+	
+	</update>	
+</mapper>

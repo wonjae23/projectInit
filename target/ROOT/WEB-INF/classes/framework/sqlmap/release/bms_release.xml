@@ -1,0 +1,701 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="bmsRelease">
+	<sql id="releaseWhere">
+		<if test="List_Data_Status != null and List_Data_Status != '' and List_Data_Status != '155005'">
+			AND Data_Status = #{List_Data_Status}	
+		</if>	
+		<if test="searchKEYWORD != null and searchKEYWORD != '' ">
+			<choose>
+				<when test="searchKEYWORD == 'a.OutPutCode' ">
+					AND a.OutPutCode LIKE '%'+#{S_Keyword}+'%'
+				</when>
+				<when test="searchKEYWORD == 'm.adminname' ">
+					AND m.adminname = #{S_Keyword}
+				</when>
+				<when test="searchKEYWORD == 'TeamName' ">
+					AND TeamName LIKE '%'+#{S_Keyword}+'%'
+				</when>
+				<when test="searchKEYWORD == 'Receiver' ">
+					AND Receiver LIKE '%'+#{S_Keyword}+'%'
+				</when>
+				<when test="searchKEYWORD == 'ReceiverID' ">
+					AND ReceiverID LIKE '%'+#{S_Keyword}+'%'
+				</when>
+				<when test="searchKEYWORD == 'cc2.Name' ">
+					AND cc2.Name LIKE '%'+#{S_Keyword}+'%'
+				</when>
+				<when test="searchKEYWORD == 'prodid' ">
+					AND prodid LIKE '%'+#{S_Keyword}+'%'
+				</when>
+				<when test="searchKEYWORD == 'erp.custom_Name' ">
+					AND erp.custom_Name LIKE '%'+#{S_Keyword}+'%'
+				</when>
+			</choose>
+		</if>		
+		<if test="searchSTYPE != null and searchSTYPE != '' ">
+			<choose>
+				<when test="searchSTYPE == 'RegDate' ">
+					<![CDATA[
+						AND ((RegDate >= #{sdate1}) and (RegDate < #{edate1}))
+					]]>
+				</when>
+				<when test="searchSTYPE == 'ExpectedDate' ">
+					<![CDATA[
+						AND ((ExpectedDate >= #{sdate1}) and (ExpectedDate < #{edate1}))
+					]]>
+				</when>
+			</choose>
+		</if>
+	</sql>
+	
+	
+	
+	<select id="selectReleaseList" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+			SELECT  * FROM
+                    (
+                        SELECT
+                             ROW_NUMBER() OVER(ORDER BY A.OutPutCode DESC) AS ROWNUM,
+                             A.OUTPUTCODE
+							,M.TEAMNAME
+							,M.ADMINNAME
+							,C.PRODNAME
+							,B.CNT
+							,CC1.NAME AS OUTPUTCENTER
+							,A.RECEIVER
+							,CC2.NAME AS DELIVERYTYPE
+							,CONVERT(VARCHAR(10), A.REGDATE, 120) REGDATE
+							,CC3.NAME OUTPUTTYPE
+							,A.RECEIVERID
+							,CONVERT(VARCHAR(10), EXPECTEDDATE, 120) EXPECTEDDATE
+							,COMPLETEDATE
+							,CC5.NAME DATA_STATUS
+							,ISNULL(DELIVERY_NUM, 'N') DELIVERY_NUM
+							,ORDERCODE
+							,A.USERID
+							,PN
+							,DBO.UF_ROWTOCOL(A.OUTPUTCODE) KK
+							,A.ADDR1
+							,A.ADDR2
+							,DD.PARCEL
+							,ERP.CUSTOM_NAME
+						FROM BM_OUTPUT A
+						INNER JOIN (
+							SELECT OUTPUTCODE
+								,MAX(PRODID) PRODID
+								,SUM(CNT) PN
+								,COUNT(PRODID) CNT
+							FROM BM_OUTPUTPROD
+							GROUP BY OUTPUTCODE
+							) B ON A.OUTPUTCODE = B.OUTPUTCODE
+						LEFT OUTER JOIN BM_PROD C ON B.PRODID = C.PRODID
+						LEFT OUTER JOIN BM_COMMON_CODE CC1 ON A.OUTCENTER = CC1.CMCODE
+						LEFT OUTER JOIN BM_COMMON_CODE CC2 ON A.DELIVERYTYPE = CC2.CMCODE
+						LEFT OUTER JOIN (
+							SELECT USERID ADMINID
+								,NAME ADMINNAME
+								,MIN(TEAMNAME) TEAMNAME
+							FROM GW_SVR.GROUPWARE.DBO.MEMBER_VIEW
+							WHERE GPCODE = 'EPK'
+								OR GPCODE = '003'
+							GROUP BY USERID
+								,NAME
+							) M ON A.USERID = M.ADMINID
+						LEFT OUTER JOIN BM_COMMON_CODE CC3 ON A.OUTPUTTYPE = CC3.CMCODE
+						LEFT OUTER JOIN BM_COMMON_CODE CC4 ON A.DELIVERYTYPE = CC4.CMCODE
+						LEFT OUTER JOIN BM_COMMON_CODE CC5 ON A.DATA_STATUS = CC5.CMCODE
+						LEFT OUTER JOIN ERP_SVR.ERP.DBO.B_CUSTOM ERP ON A.CUSTOMERCODE = ERP.CUSTOM_CODE
+						LEFT OUTER JOIN (
+							SELECT ORDERCODE
+								,DELIVERY_NUM
+								,PARCEL
+								,CONVERT(VARCHAR(10), COMPLETEDATE, 120) COMPLETEDATE
+							FROM BM_DELIVERY_REQUEST DR
+							INNER JOIN BM_DELIVERY_RESPONSE DP ON DR.DR_IDX = DP.DR_IDX
+							WHERE SITECODE = '300000'
+							GROUP BY ORDERCODE
+								,DELIVERY_NUM
+								,PARCEL
+								,CONVERT(VARCHAR(10), COMPLETEDATE, 120)
+							) DD ON A.OUTPUTCODE = DD.ORDERCODE
+						WHERE 1 = 1
+					    <include refid="releaseWhere"></include>
+                    ) PP
+               WHERE PP.ROWNUM BETWEEN #{beginNum} AND #{endNum}
+	</select>
+	
+	<select id="selectReleaseListCount" parameterType="java.util.HashMap" resultType="int">
+		   SELECT COUNT(A.OUTPUTCODE)
+			FROM BM_OUTPUT A
+			INNER JOIN (
+				SELECT OUTPUTCODE
+					,MAX(PRODID) PRODID
+					,SUM(CNT) PN
+					,COUNT(PRODID) CNT
+				FROM BM_OUTPUTPROD
+				GROUP BY OUTPUTCODE
+				) B ON A.OUTPUTCODE = B.OUTPUTCODE
+			LEFT OUTER JOIN BM_PROD C ON B.PRODID = C.PRODID
+			LEFT OUTER JOIN BM_COMMON_CODE CC1 ON A.OUTCENTER = CC1.CMCODE
+			LEFT OUTER JOIN BM_COMMON_CODE CC2 ON A.DELIVERYTYPE = CC2.CMCODE
+			LEFT OUTER JOIN (
+								SELECT USERID ADMINID, NAME ADMINNAME, MIN(TEAMNAME) TEAMNAME
+								FROM GW_SVR.GROUPWARE.DBO.MEMBER_VIEW
+								WHERE GPCODE = 'EPK' OR GPCODE = '003'
+								GROUP BY USERID, NAME
+			) M ON A.USERID = M.ADMINID
+			LEFT OUTER JOIN BM_COMMON_CODE CC3 ON A.OUTPUTTYPE = CC3.CMCODE
+			LEFT OUTER JOIN BM_COMMON_CODE CC4 ON A.DELIVERYTYPE = CC4.CMCODE
+			LEFT OUTER JOIN BM_COMMON_CODE CC5 ON A.DATA_STATUS = CC5.CMCODE
+			LEFT OUTER JOIN ERP_SVR.ERP.DBO.B_CUSTOM ERP ON A.CUSTOMERCODE = ERP.CUSTOM_CODE
+			LEFT OUTER JOIN (
+				SELECT ORDERCODE
+					,DELIVERY_NUM
+					,PARCEL
+				FROM BM_DELIVERY_REQUEST DR
+				INNER JOIN BM_DELIVERY_RESPONSE DP ON DR.DR_IDX = DP.DR_IDX
+				WHERE SITECODE = '300000'
+				GROUP BY ORDERCODE
+					,DELIVERY_NUM
+					,PARCEL
+				) DD ON A.OUTPUTCODE = DD.ORDERCODE
+			WHERE 1 = 1
+			<include refid="releaseWhere"></include>
+	</select>
+	
+	<insert id="insertRelease" parameterType="java.util.HashMap" >
+		INSERT INTO BM_OUTPUT 
+					(OUTPUTCODE, USERID, MARKETER, ZIPCODE, ADDR1, ADDR2, HP, PHONE, RECEIVER, RECEIVERID,
+					 OUTCENTER, COMMENT, OUTPUTTYPE, CUSTOMERCODE, DATA_STATUS, DELIVERYTYPE, EXPECTEDDATE, FEE)
+				VALUES(
+					#{outPutCode}, #{ADMINID}, #{marketer}, #{zipcode}, #{addr1}, #{addr2}, #{hp}, #{phone}, #{receiver}, #{receiverid},
+					#{outcenter}, #{comment}, #{outputtype}, #{customercode}, #{data_status}, #{deliverytype}, #{expecteddate}, #{fee})
+	</insert>
+	
+	<insert id="insertOutPutProd" parameterType="java.util.HashMap" >
+		INSERT INTO BM_OUTPUTPROD 
+					(OUTPUTCODE, PRODID, CNT, DATA_STATUS)
+				VALUES(
+					#{outPutCode}, #{prodid}, #{cnt}, '155002')
+	</insert>
+	
+	
+	<select id="Output_Delivery_Insert" parameterType="java.util.HashMap">
+		{CALL Output_Delivery_Insert(#{prodid}, #{prodid}, #{cnt}, #{outPutCode}, '', '300000', #{zipcode}, #{addr1}, #{addr2}, #{comment}, #{phone}, #{hp},#{receiver}	 )}
+    </select>
+
+	<select id="selectReleaseDetail" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+		SELECT A.Receiver
+				,Marketer
+				,DELIVERYTYPE
+				,CUSTOMERCODE
+				,A.ZIPCODE
+				,A.ADDR1
+				,A.ADDR2
+				,A.Hp
+				,A.PHONE
+				,B.NAME ADMINNAME
+				,COMMENT
+				,OUTPUTTYPE
+				,EXPECTEDDATE
+				,RECEIVERID
+				,OUTCENTER
+				,CUSTOMERCODE
+				,DATA_STATUS
+				,FEE
+				,A.USERID
+				,CV.CUSTOM_NAME
+			FROM BM_OutPut A
+			LEFT OUTER JOIN GW_SVR.GROUPWARE.DBO.MEMBER_VIEW B ON A.USERID = B.USERID
+			LEFT OUTER JOIN ERP_SVR.ERP.DBO.B_CUSTOM CV ON a.CUSTOMERCODE = CV.CUSTOM_CODE
+			WHERE OutPutCode = #{OutPutCode}
+	</select>
+	
+		
+	<select id="selectReleaseStatus" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+		SELECT B.DRE_IDX
+			,P.PRODNAME
+			,REQUEST_CNT
+			,B.STATUS
+			,PAUSEYN
+			,A.EXCELYN
+			,A.PRODID
+		FROM BM_DELIVERY_REQUEST A
+		INNER JOIN BM_DELIVERY_RESPONSE B ON A.DR_IDX = B.DR_IDX
+		LEFT OUTER JOIN BM_PROD P ON A.ProdID = P.PRODID
+		WHERE A.ORDERCODE = #{OutPutCode}
+	</select>
+	
+	<select id="selectReleaseBooks" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+		SELECT A.PRODID
+			,PRODNAME
+			,CNT
+			,B.BUYPRICE
+			,B.AMOUNT_REAL
+			,B.STDPRICE
+			,B.DISPERCENT
+		FROM BM_OUTPUTPROD A
+		LEFT OUTER JOIN BM_PROD B ON A.PRODID = B.PRODID
+		WHERE OUTPUTCODE = #{OutPutCode}
+	</select>
+	
+	<select id="selectReleaseStatusCnt" parameterType="java.util.HashMap" resultType="int">
+		SELECT  COUNT(*)
+		FROM BM_DELIVERY_REQUEST A
+		INNER JOIN (
+			SELECT PauseYN
+				,dr_idx
+				,prodid
+				,delivery_num
+			FROM BM_DELIVERY_RESPONSE
+			GROUP BY dr_idx
+				,prodid
+				,delivery_num
+				,PauseYN
+			) B ON A.dr_idx = B.dr_idx
+		LEFT OUTER JOIN BM_Prod P ON a.prodid = p.prodid
+		WHERE a.OrderCode = #{OutPutCode}
+	</select>
+	
+	<update id="setExpectedOutPutdateUpdate" parameterType="java.util.HashMap">
+		UPDATE 
+			BM_OUTPUT 
+		SET 
+			ExpectedDate = #{expecteddate}, RegDate = #{expecteddate}
+		WHERE 
+			OutputCode = #{OutPutCode}
+	</update>
+	
+	<update id="setExpectedInputdateUpdate" parameterType="java.util.HashMap">
+		UPDATE 
+			BM_INOUT
+		SET 
+			RegDate = #{expecteddate}
+		WHERE 
+			OutputCode = #{OutPutCode}
+	</update>
+	
+	<delete id="setDeleteDeliveryResponse" parameterType="java.util.HashMap">
+		DELETE BM_Delivery_Response 
+		WHERE dr_idx in(select distinct dr_idx From BM_delivery_Request Where OrderCode= #{OutPutCode} and siteCode = '300000');
+		
+		DELETE BM_Delivery_Request 
+		WHERE ordercode= #{OutPutCode} And siteCode = '300000';
+		
+		UPDATE 
+			BM_OutPUt 
+		SET 
+			Data_Status='155004' 
+		WHERE OutPutCode = #{OutPutCode};
+		
+		UPDATE 
+			BM_OutPUtProd 
+		SET 
+			Data_Status='155004' 
+		Where OutPutCode = #{OutPutCode};
+	</delete>
+	
+	
+	
+	<select id="getOutputPauseChk" parameterType="java.util.HashMap" resultType="String">
+		SELECT D_REQUEST.STATUS AS D_REQUEST_STATUS
+		FROM BM_DELIVERY_REQUEST AS D_REQUEST 
+		INNER JOIN BM_DELIVERY_RESPONSE AS D_RESPONSE ON D_REQUEST.dr_idx = D_RESPONSE.dr_idx 
+		WHERE DRE_IDX = #{dre_idx} AND D_REQUEST.STATUS='01'
+	</select>
+	
+	<update id="setDeliveryResponseUpdate" parameterType="java.util.HashMap">
+		UPDATE 
+			BM_DELIVERY_RESPONSE
+		SET 
+			PAUSEYN='y'
+		WHERE Dre_IDX = #{dre_idx}
+	</update>
+	
+	<update id="setOutpuProdUpdate" parameterType="java.util.HashMap">
+		UPDATE 
+			BM_OUTPUTPROD
+		SET 
+			DATA_STATUS = '155004'
+		WHERE OUTPUTCODE = #{OutPutCode} AND PRODID = #{prodid}
+	</update>
+	
+	<select id="setInOutPauseUpdate" parameterType="java.util.HashMap" resultType="String">
+		SELECT CNT
+		FROM BM_INOUT
+		WHERE OUTPUTCODE = #{OutPutCode} AND PRODID = #{prodid}
+	</select>
+	
+	<update id="setInOutCntUpdate" parameterType="java.util.HashMap">
+		UPDATE 
+			BM_INOUT
+		SET 
+			CNT = '0'
+		WHERE OUTPUTCODE = #{OutPutCode} AND PRODID = #{prodid}
+	</update>
+	
+	<update id="setInOutAmountUpdate" parameterType="java.util.HashMap">
+		UPDATE 
+			BM_PROD
+		SET 
+			AMOUNT_REAL = AMOUNT_REAL + #{tCnt}
+		WHERE PRODID = #{prodid}
+	</update>
+	
+	<update id="updateRelease" parameterType="java.util.HashMap">
+		UPDATE 
+			BM_OUTPUT 
+		SET 
+			 MARKETER = #{marketer}, ZIPCODE = #{zipcode}, ADDR1 = #{addr1}, ADDR2 = #{addr2}, HP = #{hp}
+			, PHONE = #{phone}, RECEIVER = #{receiver}, RECEIVERID = #{receiverid}, OUTCENTER = #{outcenter}, COMMENT = #{comment}, OUTPUTTYPE = #{outputtype}
+			, CUSTOMERCODE = #{customercode}, DATA_STATUS = #{data_status}, DELIVERYTYPE = #{deliverytype}, EXPECTEDDATE = #{expecteddate}, FEE = #{fee}
+		WHERE 
+			OutputCode = #{OutPutCode}
+	</update>
+	
+	<delete id="deleteRelease" parameterType="java.util.HashMap" >
+		DELETE FROM BM_OUTPUTPROD 
+		WHERE OUTPUTCODE = #{OutPutCode}
+	</delete>
+	
+	<delete id="deleteDeliveryRequest" parameterType="java.util.HashMap">
+		DELETE BM_DELIVERY_REQUEST
+		WHERE ORDERCODE= #{OutPutCode};
+		
+		DELETE FROM BM_DELIVERY_RESPONSE
+		WHERE DR_IDX IN
+		(
+			SELECT DR_IDX FROM BM_DELIVERY_REQUEST 
+			WHERE ORDERCODE= #{OutPutCode}
+		);
+	</delete>
+	
+	<select id="getReleaseBatchExcel" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+		SELECT *
+		FROM (
+			SELECT ROW_NUMBER() OVER (
+					ORDER BY A.OUTPUTCODE DESC
+					) AS ROWNUM
+				,A.OUTPUTCODE
+				,M.TEAMNAME
+				,M.ADMINNAME
+				,C.PRODNAME+CASE WHEN B.CNT > 1 THEN ' 외'+ CAST((B.CNT-1) as VARCHAR(5)) +'권' ELSE '' END PRODNAME
+				,B.CNT
+				,CC1.NAME AS OUTPUTCENTER
+				,A.RECEIVER
+				,CC2.NAME AS DELIVERYTYPE
+				,CONVERT(CHAR(10),A.REGDATE,120) AS REGDATE
+				,CC3.NAME OUTPUTTYPE
+				,A.RECEIVERID
+				,CONVERT(CHAR(10),EXPECTEDDATE,120) AS EXPECTEDDATE
+				,CC5.NAME DATA_STATUS
+				,ISNULL(DELIVERY_NUM, 'N') DELIVERY_NUM
+				,ORDERCODE
+				,A.USERID
+				,PN
+				,DBO.UF_ROWTOCOL(A.OUTPUTCODE) KK
+				,A.ADDR1
+				,A.ADDR2
+				,DD.PARCEL
+				,ERP.CUSTOM_NAME
+				,MARKETER
+				,CASE
+		            WHEN ORDERCODE  IS NULL
+		                THEN '배송없음'
+		            WHEN DELIVERY_NUM = 'N'
+		                THEN '발송전'
+		            WHEN DELIVERY_NUM IS NOT NULL
+		                THEN DELIVERY_NUM
+		        END DELIVERYTEXT
+			FROM BM_OUTPUT A
+			INNER JOIN (
+				SELECT OUTPUTCODE
+					,MAX(PRODID) PRODID
+					,SUM(CNT) PN
+					,COUNT(PRODID) CNT
+				FROM BM_OUTPUTPROD
+				GROUP BY OUTPUTCODE
+				) B ON A.OUTPUTCODE = B.OUTPUTCODE
+			LEFT OUTER JOIN BM_PROD C ON B.PRODID = C.PRODID
+			LEFT OUTER JOIN BM_COMMON_CODE CC1 ON A.OUTCENTER = CC1.CMCODE
+			LEFT OUTER JOIN BM_COMMON_CODE CC2 ON A.DELIVERYTYPE = CC2.CMCODE
+			LEFT OUTER JOIN (
+				SELECT USERID ADMINID
+					,NAME ADMINNAME
+					,MIN(TEAMNAME) TEAMNAME
+				FROM GW_SVR.GROUPWARE.DBO.MEMBER_VIEW
+				WHERE GPCODE = 'EPK'
+					OR GPCODE = '003'
+				GROUP BY USERID, NAME
+				) M ON A.USERID = M.ADMINID
+			LEFT OUTER JOIN BM_COMMON_CODE CC3 ON A.OUTPUTTYPE = CC3.CMCODE
+			LEFT OUTER JOIN BM_COMMON_CODE CC4 ON A.DELIVERYTYPE = CC4.CMCODE
+			LEFT OUTER JOIN BM_COMMON_CODE CC5 ON A.DATA_STATUS = CC5.CMCODE
+			LEFT OUTER JOIN ERP_SVR.ERP.DBO.B_CUSTOM ERP ON A.CUSTOMERCODE = ERP.CUSTOM_CODE
+			LEFT OUTER JOIN (
+				SELECT ORDERCODE
+					,DELIVERY_NUM
+					,PARCEL
+				FROM BM_DELIVERY_REQUEST DR
+				INNER JOIN BM_DELIVERY_RESPONSE DP ON DR.DR_IDX = DP.DR_IDX
+				WHERE SITECODE = '300000'
+				GROUP BY ORDERCODE
+					,DELIVERY_NUM
+					,PARCEL
+				) DD ON A.OUTPUTCODE = DD.ORDERCODE
+			WHERE 1 = 1
+				<include refid="releaseWhere"></include>
+				
+			) PP
+		ORDER BY OUTPUTCODE DESC
+	</select>
+	
+	<update id="stockUpdate" parameterType="java.util.HashMap">
+		UPDATE 
+			BM_OUTPUTPROD 
+		SET 
+			 DATA_STATUS = '155003'
+		WHERE 
+			OUTPUTCODE = #{OutPutCode};
+		
+		UPDATE 
+			BM_PROD 
+		SET 
+			 AMOUNT_REAL = AMOUNT_REAL-#{cnt}, AMOUNT_VIRTUAL = AMOUNT_VIRTUAL-#{cnt}
+		WHERE 
+			PRODID = #{prodid};
+			
+		INSERT INTO BM_INOUT 
+				(OUTPUTCODE, INOUTTYPE, USERID, MARKETER, CUSTOMERCODE, PRODID, CNT, SELLPRICE, OUTCENTER)
+		VALUES(
+				#{outPutCode}, #{outputtype}, #{ADMINID}, #{marketer}, #{customercode}, #{prodid}, #{cnt}, #{buyprice}, '154001'  );
+	</update>
+	
+	<update id="statisticUpdate" parameterType="java.util.HashMap">
+		UPDATE 
+			BM_OUTPUTPROD 
+		SET 
+			 DATA_STATUS = '155003'
+		WHERE 
+			OUTPUTCODE = #{OutPutCode};
+			
+		INSERT INTO BM_INOUT 
+				(OUTPUTCODE, INOUTTYPE, USERID, MARKETER, CUSTOMERCODE, PRODID, CNT, SELLPRICE, OUTCENTER)
+		VALUES(
+				#{outPutCode}, #{outputtype}, #{ADMINID}, #{marketer}, #{customercode}, #{prodid}, #{cnt}, #{buyprice}, #{outcenter}  );
+	</update>
+	
+	<select id="selectCorrectXls" parameterType="java.util.HashMap" resultType="int" >
+	<![CDATA[
+	SELECT COUNT(*)
+		FROM ( 
+				SELECT Addr2,HP, SessionID,receiver 
+				FROM BM_OUTPUTXLS WHERE SESSIONID = #{SESSIONID} GROUP BY ADDR2 , RECEIVER, HP, SESSIONID
+			) B ,
+	  			BM_OUTPUTXLS C 
+	  	WHERE B.ADDR2=C.ADDR2 And b.SESSIONID = c.SESSIONID AND b.RECEIVER = c.RECEIVER and b.hp<>c.hp
+	  	]]>
+	</select>
+	
+	<delete id="deleteRelaseXls" parameterType="java.util.HashMap">
+	DELETE FROM BM_OUTPUTXLS WHERE SESSIONID IN 
+	<foreach collection="releaseList" item="item" open="(" close=")" separator="," index="index">
+		#{item.SESSIONID}
+	</foreach>
+	</delete>
+	
+	<insert id="insertReleaseXls" parameterType="java.util.HashMap">
+	 INSERT INTO BM_OUTPUTXLS (SESSIONID,UserID,ZIPCODE, ADDR1,ADDR2, RECEIVER, ReceiverID, HP, PHONE, COMMENT, PRODID,  CNT, MARKETER,FEE, 
+	 OutCenter, OutputType, CustomerCode,DeliveryType ) 
+		<foreach collection="releaseList" item="item" separator=" union all " index="index">
+			SELECT #{item.SESSIONID}, 
+					#{item.USERID}, 
+					#{item.ZIPCODE},
+					#{item.ADDR1},
+					#{item.ADDR2},
+					#{item.RECEIVER}, 
+					#{item.RECEIVERID} ,
+					#{item.HP},
+					#{item.PHONE},
+					#{item.COMMENT}, 
+	 				#{item.PRODID}, 
+	 				#{item.REQUESTCNT}, 
+	 				#{item.MARKETER},
+	 				#{item.FEE}, 
+	 				#{item.OUTCENTER} ,
+	 				#{item.OUTPUTTYPE},
+	 				#{item.CUSTOMERCODE} ,
+	 				#{item.DELIVERYTYPE} 
+		</foreach>
+	
+	
+	</insert>
+	
+	
+	
+	<update id="updateOutputCodeXls" parameterType="java.util.HashMap">
+	
+		UPDATE BM_OUTPUTXLS 
+		SET OUTPUTCODE = ( Replace(Replace(Replace(convert(varchar(20),getdate(),120),'-',''),' ',''),':','') + Cast((b.o+1000) as Varchar(10) ) )  
+		FROM ( 
+				SELECT ADDR2, ROW_Number() OVER (ORDER BY ADDR2) AS O, SESSIONID, RECEIVER 
+				FROM BM_OUTPUTXLS 
+				WHERE SESSIONID = #{SESSIONID} GROUP BY ADDR2 , RECEIVER, HP, SESSIONID
+			) B ,
+	  			BM_OUTPUTXLS C WHERE B.ADDR2=C.ADDR2 And b.SESSIONID = c.SESSIONID AND b.RECEIVER = c.RECEIVER
+	
+	
+	</update>
+	
+	
+	<select id="selectOutPutXlsCount" parameterType="java.util.HashMap" resultType="int">
+		SELECT COUNT(*) FROM BM_OUTPUTXLS WHERE SESSIONID = #{SESSIONID}
+	</select>
+	
+	
+	<select id="selectOutPutXls" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+	
+		SELECT  * ,
+		<![CDATA[
+			CASE WHEN SELLYN = '2' OR AMOUNT_REAL-SUMCNT < PRODTOTALCNT THEN 'Y' ELSE 'N' END CNTEXCEED
+			]]>
+		FROM (
+		SELECT  ROW_NUMBER() OVER(ORDER BY A.IDX DESC) AS ROWNUM, 
+                A.IDX, B.ADMINNAME, '' TEAMNAME, A.ZIPCODE, A.ADDR1, A.ADDR2, A.RECEIVER, A.RECEIVERID, A.HP, A.PHONE, 
+				A.COMMENT , A.OUTPUTCODE, A.PRODID, A.CNT, A.MARKETER, A.FEE , C.PRODNAME, C.BUYPRICE, c.AMOUNT_REAL,
+				C1.NAME AS OUTCENTER , C2.NAME AS OUTPUTTYPE , isNull(C3.CUSTOM_NAME,'일반고객') CUSTOM_NAME , C4.NAME AS DELIVERYTYPE , 
+				C.SELLYN, isNull(k.SUMCNT,0) SUMCNT , Z.PRODTOTALCNT				
+		FROM BM_OUTPUTXLS A 
+		LEFT OUTER JOIN ( SELECT USERID ADMINID, NAME ADMINNAME 
+							FROM GW_SVR.GROUPWARE.DBO.MEMBER_VIEW 
+							WHERE GPCODE ='EPK' OR GPCODE = '003' 
+							GROUP BY USERID, NAME
+						) B ON A.USERID = B.ADMINID 
+		LEFT OUTER JOIN BM_PROD C ON A.PRODID = C.PRODID
+		LEFT OUTER JOIN BM_COMMON_CODE C1 ON A.OUTCENTER = C1.CMCODE
+		LEFT OUTER JOIN BM_COMMON_CODE C2 ON A.OUTPUTTYPE =C2.CMCODE
+		LEFT OUTER JOIN ERP_SVR.ERP.DBO.B_CUSTOM C3 ON A.CUSTOMERCODE = C3.CUSTOM_CODE 
+		LEFT OUTER JOIN BM_COMMON_CODE C4 ON A.DELIVERYTYPE = C4.CMCODE
+		LEFT OUTER JOIN (
+							SELECT PRODID, SUM(CNT) SUMCNT
+							FROM (
+									SELECT OUTPUTCODE 
+									FROM BM_OUTPUT
+									WHERE DATA_STATUS='155002' 
+								) A 
+		 					INNER JOIN BM_OUTPUTPROD B ON A.OUTPUTCODE = B.OUTPUTCODE 
+		 					GROUP BY PRODID
+		 				) k ON A.PRODID = K.PRODID
+		 LEFT OUTER JOIN (
+		 					SELECT PRODID, SUM(CNT) PRODTOTALCNT 
+		 					FROM BM_OUTPUTXLS
+		 					WHERE SESSIONID =#{SESSIONID}
+		 					GROUP BY PRODID
+						) Z ON A.PRODID = Z.PRODID
+		WHERE SESSIONID = #{SESSIONID}
+		)  PP
+        WHERE PP.ROWNUM BETWEEN #{beginNum} AND #{endNum}
+	
+	</select>
+	
+	
+	<delete id="deleteOutPutXls" parameterType="java.util.HashMap" >
+		DELETE FROM BM_OUTPUTXLS WHERE IDX IN		
+		<foreach collection="IDXS" item="IDX" index="index" separator="," open="(" close=")">
+			#{IDX}
+		</foreach>
+	
+	</delete>
+	
+	
+	<insert id="insertOutPutXls" parameterType="java.util.HashMap">
+		<![CDATA[
+		INSERT INTO BM_OUTPUT (OUTPUTCODE, USERID, MARKETER, ZIPCODE, ADDR1, ADDR2, RECEIVER, RECEIVERID, 
+								HP, PHONE, OUTCENTER, COMMENT, OUTPUTTYPE,CUSTOMERCODE, DELIVERYTYPE , 
+								DATA_STATUS, EXPECTEDDATE, FEE)	 	
+	 	SELECT DISTINCT OUTPUTCODE, USERID, MARKETER, ZIPCODE, ADDR1, ADDR2, RECEIVER, RECEIVERID, 
+	 					HP, PHONE, OUTCENTER, COMMENT, OUTPUTTYPE, CUSTOMERCODE, DELIVERYTYPE ,
+	 					CASE WHEN OUTCENTER='154010' AND OUTPUTTYPE<>'137001' THEN '155003' ELSE '155002' END, 
+	 					#{EXPECTEDDATE}, FEE
+	 	FROM BM_OUTPUTXLS WHERE SESSIONID = #{SESSIONID} AND IDX IN
+	 		]]>
+	 	<foreach collection="IDXS" item="IDX" index="index" separator="," open="(" close=")">
+			#{IDX}
+		</foreach>
+		
+		
+	</insert>
+	<insert id="insertOutPutProdXls" parameterType="java.util.HashMap">
+	<![CDATA[
+		INSERT INTO BM_OUTPUTPROD (OUTPUTCODE, PRODID, CNT, DATA_STATUS )
+		SELECT OUTPUTCODE, PRODID, CNT, CASE WHEN OUTCENTER='154010' AND OUTPUTTYPE<>'137001' THEN '155003' ELSE '155002' END
+		FROM BM_OUTPUTXLS  WHERE SESSIONID = #{SESSIONID} AND IDX IN 
+		]]>
+		<foreach collection="IDXS" item="IDX" index="index" separator="," open="(" close=")">
+			#{IDX}
+		</foreach>
+	</insert>
+	
+	<select id="selectDeliveryInfor" parameterType="java.util.HashMap" resultType="java.util.HashMap" >
+	
+		SELECT A.ZIPCODE, ADDR1, ADDR2, RECEIVER, HP, A.PHONE, COMMENT, OUTPUTCODE, A.PRODID, CNT, OUTCENTER, OUTPUTTYPE,
+			DELIVERYTYPE, B.BUYPRICE,	A.USERID, MARKETER,	CUSTOMERCODE
+		FROM BM_OUTPUTXLS A 
+		INNER JOIN BM_PROD B ON A.PRODID = B.PRODID
+		WHERE SESSIONID= #{SESSIONID} AND IDX IN  
+		<foreach collection="IDXS" item="IDX" index="index" separator="," open="(" close=")">
+			#{IDX}
+		</foreach>
+	</select>
+	
+	<select id="insertDeliveryRequestResponse" parameterType="java.util.HashMap">
+		{CALL Output_Delivery_Insert(#{PRODID},#{PRODID},#{CNT},#{OUTPUTCODE},'',300000,#{ZIPCODE},#{ADDR1},#{ADDR2},#{COMMENT},#{PHONE},#{HP},#{RECEIVER},#{PARCEL} )}
+	</select> 
+	
+	<insert id="insertInOut" parameterType="java.util.HashMap">
+		INSERT INTO BM_INOUT (OUTPUTCODE, INOUTTYPE, USERID, MARKETER, CUSTOMERCODE, PRODID, CNT, SELLPRICE, OUTCENTER, REGDATE )
+		VALUES(
+			#{OUTPUTCODE},#{OUTPUTTYPE},#{USERID},#{MARKETER},#{CUSTOMERCODE},#{PRODID},#{CNT},#{BUYPRICE},#{OUTCENTER},GETDATE()
+		)
+		
+		UPDATE BM_PROD SET AMOUNT_REAL = AMOUNT_REAL - #{CNT} WHERE PRODIDD = #{PRODID} 
+	</insert>
+	
+	<update id="setDeliveryResponsePauseUpdateN" parameterType="java.util.HashMap">
+		UPDATE
+			BM_DELIVERY_RESPONSE
+		SET
+			PAUSEYN = 'n'
+		WHERE
+			DRE_IDX = #{dre_idx}
+	</update>
+	
+	<select id="getOutPutProdCnt" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+		SELECT 
+			CNT
+		FROM
+			BM_INOUT
+		WHERE 
+			OUTPUTCODE = #{OutPutCode} AND PRODID = #{prodid}
+	</select>
+	
+	<update id="InOutCntUpdate" parameterType="java.util.HashMap">
+		UPDATE 
+			BM_INOUT
+		SET 
+			CNT = #{tCnt}
+		WHERE 
+			OUTPUTCODE = #{OutPutCode} AND PRODID = #{prodid}
+	</update>
+	
+	<update id="InOutAmountUpdate" parameterType="java.util.HashMap">
+		UPDATE 
+			BM_PROD
+		SET 
+			AMOUNT_REAL = AMOUNT_REAL - #{tCnt}
+		WHERE 
+			PRODID = #{prodid}
+	</update>
+</mapper>
+

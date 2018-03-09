@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="bmsCommon">	
+
+	<sql id="commonsWhere">
+		<if test="searchSTYPE != null and searchSTYPE != '' ">
+			<choose>
+				<when test="searchSTYPE == 'custom_name' ">
+					AND CUSTOM_NAME LIKE '%'+#{searchKEYWORD}+'%'
+				</when>
+				<when test="searchSTYPE == 'addr1' ">
+					AND ADDR1 LIKE '%'+#{searchKEYWORD}+'%'
+				</when>	
+			</choose>
+		</if>
+	</sql>
+	
+	
+	<!-- trace info insert -->
+	<insert id="insertTraceInfo" parameterType="java.util.HashMap">
+		INSERT INTO BM_TRACE
+			(TR_KEY,MB_IDX,ST_CODE,TR_SYSGBN,TR_URL,TR_IP,TR_LOGINDT,TR_LOGOUTDT)
+		VALUES
+			(#{TR_KEY},#{MB_IDX},#{ST_CODE},#{TR_SYSGBN},#{TR_URL},#{TR_IP},GETDATE(),NULL)		
+	</insert>	
+	
+	<!-- trace logout -->
+	<update id="updateTraceLogout" parameterType="java.util.HashMap">
+		UPDATE BM_TRACE SET
+		TR_LOGOUTDT=GETDATE()
+		WHERE TR_KEY=#{TR_KEY}
+	</update>
+	  
+	<!-- exception info 저장 -->
+	<insert id="insertExceptionInfo" parameterType="java.util.HashMap">
+		INSERT INTO BM_EXCEPTION
+		(MB_IDX,ST_CODE,EX_SYSGBN,EX_CLASS,EX_TYPE,EX_MSG,EX_TRMSG,EX_IP,EX_OS,EX_BROWSER,EX_BRVER,EX_AGENT)
+		VALUES
+		(CONVERT(INT,#{MB_IDX}),#{ST_CODE},#{EX_SYSGBN},#{EX_CLASS},#{EX_TYPE},#{EX_MSG},#{EX_TRMSG},#{EX_IP},#{EX_OS},#{EX_BROWSER},#{EX_BRVER},#{EX_AGENT})
+	</insert>
+	
+	
+	
+	<!-- 운영자 등록 IP 리스트  -->
+	<select id="selectIpManagerList" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+		SELECT * FROM BM_IPMANAGER AS AL
+		INNER JOIN GW_SVR.GROUPWARE.DBO.MEMBER_TAB AS GW 
+		ON AL.IE_USERIDX = GW.MEMBERID 
+		WHERE AL.IE_SYSGBN = #{IE_SYSGBN}
+		AND GW.USERID=#{LOGINID}
+		AND AL.IE_STATUS = 'A'
+	</select>
+	
+	<!-- 현재시간  -->
+	<select id="selectDate" resultType="String">
+		SELECT REPLACE(REPLACE(CONVERT(VARCHAR, GETDATE(), 120), ' ', '_'), ':','')
+	</select>
+	
+	<!-- 거래처 List count -->
+	<select id="selectTotalCustomerListCount" parameterType="java.util.HashMap" resultType="int">
+		<![CDATA[
+		SELECT COUNT(*)
+		FROM (
+			SELECT CUSTOM_CODE
+				,CUSTOM_NAME
+				,ZIP_CODE
+				,ADDR1
+				,TELEPHON
+			FROM ERP_SVR.ERP.DBO.B_CUSTOM
+			) P
+		WHERE 1 = 1
+		]]>
+		<include refid="commonsWhere"></include>
+	</select>
+	
+	<!-- 거래처 List -->
+	<select id="getTotalCustomerList" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+		<![CDATA[
+			SELECT *
+			FROM
+                   (
+                         SELECT
+                                ROW_NUMBER() OVER(ORDER BY CUSTOM_NAME) AS ROWNUM,
+                                CUSTOM_CODE,
+	                     CUSTOM_NAME,
+	                     ZIP_CODE,
+	                     ADDR1,
+	                     TELEPHON
+	                     FROM ERP_SVR.ERP.DBO.B_CUSTOM
+	                     WHERE 1 = 1
+	                     ]]>
+	                     <include refid="commonsWhere"></include>
+                   ) AS TT
+            WHERE TT.ROWNUM BETWEEN #{beginNum} AND #{endNum}
+		
+		
+	
+	</select>
+</mapper>

@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-3.0.xsd">
+	
+	<bean id="propertyConfigurer" class="org.springframework.beans.factory.config.PropertyPlaceholderConfigurer">
+        <property name="locations">
+            <list>
+                <value>classpath:/framework/properties/jdbc.properties</value>
+            </list>
+        </property>
+    </bean>
+
+	<!-- basic DataSource -->
+    <bean id="dataSourceLMS" class="org.apache.commons.dbcp.BasicDataSource" destroy-method="close">
+        <property name="driverClassName" value="${datasource.jdbc.lms.driver}"/>
+        <property name="url" value="${datasource.jdbc.lms.url}"/>
+        <property name="username" value="${datasource.jdbc.lms.username}"/>
+        <property name="password" value="${datasource.jdbc.lms.password}"/>
+        <property name="initialSize" value="${datasource.jdbc.lms.initialSize}"/>
+	    <property name="maxActive" value="${datasource.jdbc.lms.maxActive}"/>
+	    <property name="maxIdle" value="${datasource.jdbc.lms.maxIdle}"/>
+	    <property name="maxWait" value="${datasource.jdbc.lms.maxWait}"/>   
+    </bean>        
+    
+    
+   
+</beans>

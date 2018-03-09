@@ -1,0 +1,2086 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="bmsInventory">
+	<sql id="cateidxSelect">
+		SELECT * FROM BM_PROD 
+			<if test="CATEIDX != null and CATEIDX !='' ">
+				WHERE CATEGORYID IN (
+									SELECT AM_IDX FROM BM_BOOK_CATEGORY 
+									WHERE AM_IDX IN 
+									<foreach collection="CATEIDX" item="IDX" index="index" separator="," open="(" close=")">
+									#{IDX}
+									</foreach>
+										OR 
+									AM_TOPIDX IN
+									<foreach collection="CATEIDX" item="IDX" index="index" separator="," open="(" close=")">
+										#{IDX}
+									</foreach>									
+										OR AM_TOPIDX IN (
+														SELECT AM_IDX FROM BM_BOOK_CATEGORY 
+														WHERE AM_TOPIDX IN 
+														<foreach collection="CATEIDX" item="IDX" index="index" separator="," open="(" close=")">
+															#{IDX}
+														</foreach>
+																		)
+					 			)
+			</if> 
+		
+	</sql>
+	<sql id="inventoryWhere">
+		<if test="searchKEYWORD != null and searchKEYWORD != '' ">
+			<choose>
+				<when test="searchKEYWORD == 'prodid' ">
+					AND PRODID LIKE '%'+#{S_Keyword}+'%'
+				</when>
+			</choose>
+		</if>		
+		AND DATEDIFF(D,#{sdate},REGDATE)>=0 AND DATEDIFF(D,REGDATE,#{edate})>=0
+	</sql>
+	<sql id="inventoryDateWhere">
+		AND DATEDIFF(D,#{sdate},D_REQUEST.REGDATE)>=0 AND DATEDIFF(D,D_REQUEST.REGDATE,#{edate})>=0
+	</sql>
+	
+	<select id="selectOutPutPercentCount" parameterType="java.util.HashMap" resultType="int">
+		SELECT COUNT(BMS.PRODID)
+		FROM (
+			SELECT PRODID
+				,ROUND(SUM(A) / CAST(SUM(TOTAL) AS FLOAT) * 100, 2) AA
+				,SUM(A) A
+				,ROUND(SUM(B) / CAST(SUM(TOTAL) AS FLOAT) * 100, 2) AB
+				,SUM(B) B
+				,ROUND(SUM(C) / CAST(SUM(TOTAL) AS FLOAT) * 100, 2) AC
+				,SUM(C) C
+				,ROUND(SUM(D) / CAST(SUM(TOTAL) AS FLOAT) * 100, 2) AD
+				,SUM(D) D
+				,ROUND(SUM(E) / CAST(SUM(TOTAL) AS FLOAT) * 100, 2) AE
+				,SUM(E) E
+				,SUM(TOTAL) TOTAL
+			FROM (
+				SELECT PRODID
+					,SUM(CASE 
+							WHEN TEAMNAME = '교육사업1팀'
+								THEN CNT
+							ELSE 0
+							END) A
+					,SUM(CASE 
+							WHEN TEAMNAME = '교육사업2팀'
+								THEN CNT
+							ELSE 0
+							END) B
+					,SUM(CASE 
+							WHEN TEAMNAME = '법인영업1팀'
+								THEN CNT
+							ELSE 0
+							END) C
+					,SUM(CASE 
+							WHEN TEAMNAME = '법인영업2팀'
+								THEN CNT
+							ELSE 0
+							END) D
+					,SUM(CASE 
+							WHEN TEAMNAME = '학원사업팀'
+								THEN CNT
+							ELSE 0
+							END) E
+					,SUM(CNT) TOTAL
+				FROM (
+					SELECT PRODID
+						,TEAMNAME
+						,SUM(CNT) CNT
+					FROM (
+						SELECT USERID
+							,PRODID
+							,SUM(CNT) CNT
+						FROM (
+							SELECT A.USERID
+								,B.PRODID
+								,B.CNT
+							FROM BM_OUTPUT A
+							INNER JOIN BM_OUTPUTPROD B ON A.OUTPUTCODE = B.OUTPUTCODE
+							LEFT OUTER JOIN (
+								SELECT A.ORDERCODE
+									,A.STATUS
+									,B.DELIVERY_NUM
+								FROM BM_DELIVERY_REQUEST A
+								INNER JOIN BM_DELIVERY_RESPONSE B ON A.DR_IDX = B.DR_IDX
+								WHERE DELIVERY_NUM IS NOT NULL
+									AND B.STATUS = '03'
+								) DR ON A.OUTPUTCODE = DR.ORDERCODE
+							WHERE a.outcenter = '154001'
+								AND a.DATA_status = '155003'
+								AND b.DATA_status = '155003'
+								<include refid="inventoryWhere"></include>
+							) TT
+						GROUP BY USERID
+							,PRODID
+						) BMS
+					LEFT OUTER JOIN (
+									SELECT USERID ADMINID, MIN(TEAMNAME) TEAMNAME 
+									FROM GW_SVR.GROUPWARE.DBO.MEMBER_VIEW 
+									WHERE GPCODE = 'EPK' OR GPCODE = '003'
+									GROUP BY USERID
+					) GW ON BMS.USERID = GW.ADMINID
+					GROUP BY TEAMNAME
+						,PRODID
+					) TT
+				GROUP BY TEAMNAME
+					,PRODID
+				) KK
+			GROUP BY PRODID
+			) BMS
+		INNER JOIN BM_PROD P ON BMS.PRODID = P.PRODID
+		WHERE P.CATEGORYID NOT IN (10323)
+		
+	</select>
+	
+	<select id="selectOutPutPercent" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+		SELECT  *
+		FROM (
+			SELECT ROW_NUMBER() OVER (
+					ORDER BY BMS.PRODID ASC
+					) AS ROWNUM
+				,BMS.PRODID
+				,PRODNAME
+				,AA
+				,A
+				,AB
+				,B
+				,AC
+				,C
+				,AD
+				,D
+				,AE
+				,E
+				,TOTAL
+			FROM (
+				SELECT PRODID
+					,ROUND(SUM(A) / CAST(SUM(TOTAL) AS FLOAT) * 100, 2) AA
+					,SUM(A) A
+					,ROUND(SUM(B) / CAST(SUM(TOTAL) AS FLOAT) * 100, 2) AB
+					,SUM(B) B
+					,ROUND(SUM(C) / CAST(SUM(TOTAL) AS FLOAT) * 100, 2) AC
+					,SUM(C) C
+					,ROUND(SUM(D) / CAST(SUM(TOTAL) AS FLOAT) * 100, 2) AD
+					,SUM(D) D
+					,ROUND(SUM(E) / CAST(SUM(TOTAL) AS FLOAT) * 100, 2) AE
+					,SUM(E) E
+					,SUM(TOTAL) TOTAL
+				FROM (
+					SELECT PRODID
+						,SUM(CASE 
+								WHEN TEAMNAME = '교육사업1팀'
+									THEN CNT
+								ELSE 0
+								END) A
+						,SUM(CASE 
+								WHEN TEAMNAME = '교육사업2팀'
+									THEN CNT
+								ELSE 0
+								END) B
+						,SUM(CASE 
+								WHEN TEAMNAME = '법인영업1팀'
+									THEN CNT
+								ELSE 0
+								END) C
+						,SUM(CASE 
+								WHEN TEAMNAME = '법인영업2팀'
+									THEN CNT
+								ELSE 0
+								END) D
+						,SUM(CASE 
+								WHEN TEAMNAME = '학원사업팀'
+									THEN CNT
+								ELSE 0
+								END) E
+						,SUM(CNT) TOTAL
+					FROM (
+						SELECT PRODID
+							,TEAMNAME
+							,SUM(CNT) CNT
+						FROM (
+							SELECT USERID
+								,PRODID
+								,SUM(CNT) CNT
+							FROM (
+								SELECT A.USERID
+									,B.PRODID
+									,B.CNT
+								FROM BM_OUTPUT A
+								INNER JOIN BM_OUTPUTPROD B ON A.OUTPUTCODE = B.OUTPUTCODE
+								LEFT OUTER JOIN (
+									SELECT A.ORDERCODE
+										,A.STATUS
+										,B.DELIVERY_NUM
+									FROM BM_DELIVERY_REQUEST A
+									INNER JOIN BM_DELIVERY_RESPONSE B ON A.DR_IDX = B.DR_IDX
+									WHERE DELIVERY_NUM IS NOT NULL
+										AND B.STATUS = '03'
+									) DR ON A.OUTPUTCODE = DR.ORDERCODE
+								WHERE A.OUTCENTER = '154001'
+									AND A.DATA_STATUS = '155003'
+									AND B.DATA_STATUS = '155003'
+									<include refid="inventoryWhere"></include>
+								) TT
+							GROUP BY USERID
+								,PRODID
+							) BMS
+						LEFT OUTER JOIN (
+											SELECT USERID ADMINID, MIN(TEAMNAME) TEAMNAME 
+											FROM GW_SVR.GROUPWARE.DBO.MEMBER_VIEW 
+											WHERE GPCODE = 'EPK' OR GPCODE = '003'
+											GROUP BY USERID
+						) GW ON BMS.USERID = GW.ADMINID
+						GROUP BY TEAMNAME
+							,PRODID
+						) TT
+					GROUP BY TEAMNAME
+						,PRODID
+					) KK
+				GROUP BY PRODID
+				) BMS
+			INNER JOIN BM_PROD P ON BMS.PRODID = P.PRODID
+			WHERE P.CATEGORYID NOT IN (10323)
+			) PP
+		WHERE ROWNUM BETWEEN #{beginNum} AND #{endNum}
+		ORDER BY PRODID
+	</select>
+	
+	<select id="selectGoodsOutPutSitePercentCount" parameterType="java.util.HashMap" resultType="int">
+		<![CDATA[
+		SELECT COUNT(BMS.PRODID)
+		FROM (
+			SELECT T.PRODID
+				,CONVERT(VARCHAR, ROUND((CAST(SUM(T.B2B) AS FLOAT) / CAST(SUM(T.TOTAL) AS FLOAT)) * 100, 2)) AS B2BA
+				,CONVERT(VARCHAR, SUM(T.B2B)) AS B2B
+				,CONVERT(VARCHAR, ROUND((CAST(SUM(T.B2C) AS FLOAT) / CAST(SUM(T.TOTAL) AS FLOAT)) * 100, 2)) AS B2CA
+				,CONVERT(VARCHAR, SUM(T.B2C)) AS B2C
+				,CONVERT(VARCHAR, SUM(T.TOTAL)) AS TOTAL
+			FROM (
+				SELECT S.PRODID
+					,SUM(CASE 
+							WHEN LEN(S.SITECODE) = 5
+								THEN S.CNT
+							ELSE 0
+							END) AS B2B
+					,SUM(CASE 
+							WHEN LEN(S.SITECODE) = 6
+								THEN S.CNT
+							ELSE 0
+							END) AS B2C
+					,SUM(S.CNT) AS TOTAL
+				FROM (
+					SELECT D_RESPONSE.PRODID AS PRODID
+							,D_REQUEST.SITECODE AS SITECODE
+							,D_REQUEST.REQUEST_CNT AS CNT
+							,D_REQUEST.REGDATE AS REGDATE
+						FROM  BM_DELIVERY_REQUEST AS D_REQUEST 
+						INNER JOIN BM_DELIVERY_RESPONSE AS D_RESPONSE 
+						ON D_REQUEST.DR_IDX = D_RESPONSE.DR_IDX 
+						WHERE  D_RESPONSE.DELIVERY_NUM IS NOT NULL
+							AND D_REQUEST.SITECODE < '300000'
+							AND D_REQUEST.STATUS = '03'
+						]]>
+						<include refid="inventoryDateWhere"></include>
+					) S
+				GROUP BY S.PRODID
+					,S.SITECODE
+				) T
+			GROUP BY T.PRODID
+			) BMS
+		LEFT OUTER JOIN BM_PROD P ON BMS.PRODID = P.PRODID
+	</select>
+	
+	<select id="selectGoodsOutPutSitePercent" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+		<![CDATA[
+		SELECT *
+		FROM (
+			SELECT ROW_NUMBER() OVER (
+					ORDER BY BMS.PRODID ASC
+					) AS ROWNUM
+				,BMS.PRODID
+				,PRODNAME
+				,B2BA
+				,B2B
+				,B2CA
+				,B2C
+				,TOTAL
+			FROM (
+				SELECT T.PRODID
+					,Convert(VARCHAR, ROUND((CAST(SUM(T.B2B) AS FLOAT) / CAST(SUM(T.TOTAL) AS FLOAT)) * 100, 2)) AS B2BA
+					,Convert(VARCHAR, SUM(T.B2B)) AS B2B
+					,Convert(VARCHAR, ROUND((CAST(SUM(T.B2C) AS FLOAT) / CAST(SUM(T.TOTAL) AS FLOAT)) * 100, 2)) AS B2CA
+					,Convert(VARCHAR, SUM(T.B2C)) AS B2C
+					,Convert(VARCHAR, SUM(T.TOTAL)) AS TOTAL
+				FROM (
+					SELECT S.PRODID
+						,SUM(CASE 
+								WHEN LEN(S.SITECODE) = 5
+									THEN S.CNT
+								ELSE 0
+								END) AS B2B
+						,SUM(CASE 
+								WHEN LEN(S.SITECODE) = 6
+									THEN S.CNT
+								ELSE 0
+								END) AS B2C
+						,SUM(S.CNT) AS TOTAL
+					FROM (
+						SELECT D_RESPONSE.PRODID AS PRODID
+							,D_REQUEST.SITECODE AS SITECODE
+							,D_REQUEST.REQUEST_CNT AS CNT
+							,D_REQUEST.REGDATE AS REGDATE
+						FROM  BM_DELIVERY_REQUEST AS D_REQUEST 
+						INNER JOIN BM_DELIVERY_RESPONSE AS D_RESPONSE 
+						ON D_REQUEST.DR_IDX = D_RESPONSE.DR_IDX 
+						WHERE  D_RESPONSE.DELIVERY_NUM IS NOT NULL
+							AND D_REQUEST.SITECODE < '300000'
+							AND D_REQUEST.STATUS = '03'
+							]]>
+							<include refid="inventoryDateWhere"></include>
+						) S
+					GROUP BY S.PRODID
+						,S.SITECODE
+					) T
+				GROUP BY T.PRODID
+				) BMS
+			LEFT OUTER JOIN BM_PROD P ON BMS.PRODID = P.PRODID
+			) PP
+		WHERE ROWNUM BETWEEN #{beginNum} AND #{endNum}
+		ORDER BY PP.PRODID
+	</select>
+	
+	
+	
+	<sql id="goodsInOutWhere">
+		<if test="searchKEYWORD != null and searchKEYWORD != '' and searchSELECT != null and searchSELECT != ''  ">
+			<choose>
+				<when test="searchSELECT == 'teamname' ">
+					AND C.TEAMNAME LIKE '%'+#{searchKEYWORD}+'%'
+				</when>
+				<when test="searchSELECT == 'adminname' ">
+					AND C.ADMINNAME LIKE '%'+#{searchKEYWORD}+'%'
+				</when>
+				<when test="searchSELECT == 'marketer' ">
+					AND A.MARKETER LIKE '%'+#{searchKEYWORD}+'%'
+				</when>
+				<when test="searchSELECT == 'prodname' ">
+					AND B.PRODNAME LIKE '%'+#{searchKEYWORD}+'%'
+				</when>
+				<when test="searchSELECT == 'prodid' ">
+					AND A.PRODID LIKE '%'+#{searchKEYWORD}+'%'
+				</when>
+				<when test="searchSELECT == 'outputcode' ">
+					AND A.OUTPUTCODE LIKE '%'+#{searchKEYWORD}+'%'
+				</when>
+				<when test="searchSELECT == 'inputcode' ">
+					AND A.INPUTCODE LIKE '%'+#{searchKEYWORD}+'%'
+				</when>
+				
+			</choose>
+		</if>
+		<choose>
+				<when test="DAYTYPE == 'regdate' ">		
+				AND DATEDIFF(D,#{sdate},REGDATE)>=0 AND DATEDIFF(D,REGDATE,#{edate})>=0
+				</when>
+				<when test="DAYTYPE == 'receiptdate' ">		
+				AND DATEDIFF(D,#{sdate},RECEIPTDATE)>=0 AND DATEDIFF(D,RECEIPTDATE,#{edate})>=0
+				</when>
+				<otherwise>
+				AND DATEDIFF(D,#{sdate},REGDATE)>=0 AND DATEDIFF(D,REGDATE,#{edate})>=0
+				</otherwise>
+		</choose>
+				
+		
+		<if test="INOUTCENTER !='' and INOUTCENTER != null">
+						
+			<choose>
+				<when test="INOUT == '' or INOUT == null">
+						AND (A.INCENTER =#{INOUTCENTER}  OR A.OUTCENTER =#{INOUTCENTER} )
+				</when>
+				<when test="INOUT == 'input' ">
+					AND A.INCENTER = #{INOUTCENTER} AND A.INCENTER IS NOT NULL
+				</when>
+				<when test="INOUT == 'output' ">
+					AND A.OUTCENTER = #{INOUTCENTER} AND A.OUTCENTER IS NOT NULL
+				</when>
+			</choose>	
+		
+		</if>
+				<if test="INOUT =='input'">
+					AND A.INPUTCODE IS NOT NULL
+				</if>
+				<if test="INOUT =='output'">
+					AND A.OUTPUTCODE IS NOT NULL
+				</if>
+		
+	</sql>
+	
+	
+	<select id="selectGoodsInOutList" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+		SELECT * FROM (
+			SELECT ROW_NUMBER() OVER(ORDER BY A.IDX DESC) AS ROWNUM, 
+			<![CDATA[
+				CASE WHEN CHARINDEX('반품',G.NAME) >0 THEN 'orange'
+				WHEN CHARINDEX('입고',G.NAME) >0 THEN 'blue'
+				WHEN CHARINDEX('출고',G.NAME) >0 THEN 'red'
+				END	INOUTTEXT
+				, G.NAME INOUTTYPE 
+			 	, C.ADMINNAME 
+			 	, CASE WHEN C.ADMINNAME='' THEN DEPARTMENT 
+			 		ELSE			 		 
+			 		 	CASE WHEN OT.MARKETER<>'' AND CHARINDEX(OT.MARKETER ,'이승주,김태헌,김보신,이상용')>0 THEN TC.TEAMNAME 
+			 		 	ELSE C.TEAMNAME 
+			 		 	END 
+			 		 
+			 		 END TEAMNAME 
+			 	, OT.MARKETER 
+			 	, F.CUSTOM_NAME 
+				, B.PRODNAME 
+				, A.CNT 
+				, A.DISPERCENT 
+				, B.BUYPRICE PRICE 
+				, D.NAME INCENTER 
+			  	, E.NAME OUTCENTER 
+				, CONVERT(VARCHAR(10),REGDATE,120) REGDATE
+				, USERID
+				, A.PRODID 
+				, B.MAKECOM 
+			 	, A.INPUTCODE
+			 	, A.OUTPUTCODE
+			 	, CASE WHEN USERID='LMS' THEN S.SITENAME ELSE 'BMS'  END SITENAME
+			 	, CONVERT(VARCHAR(10),A.RECEIPTDATE ,120) RECEIPTDATE 
+			 	, DEPARTMENT 
+				, RECEIVER
+				, CD10.NAME DELIVERYTYPE
+				]]> 
+			FROM BM_INOUT A INNER JOIN (
+										<include refid="cateidxSelect"></include>
+			) B ON A.PRODID = B.PRODID
+			LEFT OUTER JOIN ( SELECT OUTPUTCODE, DELIVERYTYPE, MARKETER FROM BM_OUTPUT) OT ON A.OUTPUTCODE=OT.OUTPUTCODE
+			LEFT OUTER JOIN BM_COMMON_CODE CD10 ON OT.DELIVERYTYPE = CD10.CMCODE
+			LEFT OUTER JOIN (
+								SELECT ORDERCODE, RECEIVER 
+								FROM BM_DELIVERY_REQUEST GROUP BY ORDERCODE, RECEIVER
+							) RQ ON A.OUTPUTCODE = RQ.ORDERCODE	
+		 	LEFT OUTER JOIN (
+		 						SELECT ADMINID, ADMINNAME, MAX(TEAMNAME) TEAMNAME 
+		 						FROM (
+		 								SELECT NAME ADMINNAME, USERID ADMINID, TEAMNAME 
+									FROM GW_SVR.GROUPWARE.DBO.MEMBER_VIEW 
+									WHERE GPCOMNUM='105-86-56986' 
+		 						) TT GROUP BY ADMINID, ADMINNAME
+		 						 
+		 	) C ON A.USERID = C.ADMINID 
+		 	LEFT OUTER JOIN ( SELECT NAME ADMINNAME, USERID ADMINID, TEAMNAME 
+									FROM GW_SVR.GROUPWARE.DBO.MEMBER_VIEW 
+									WHERE GPCOMNUM='105-86-56986' 
+			) TC ON OT.MARKETER = TC.ADMINNAME
+		 	LEFT OUTER JOIN BM_COMMON_CODE D ON A.InCenter = D.CMCODE 
+		 	LEFT OUTER JOIN BM_COMMON_CODE E ON A.outCenter = E.CMCODE 
+		 	LEFT OUTER JOIN ERP_SVR.ERP.DBO.B_CUSTOM F ON A.CUSTOMERCODE = F.CUSTOM_CODE 
+		 	LEFT OUTER JOIN BM_COMMON_CODE G ON A.INOUTTYPE = G.CMCODE 
+		 	LEFT OUTER JOIN ( 
+		 						SELECT SITENAME, ORDERCODE, DEPARTMENT 
+		 						FROM (
+		 								SELECT SITENAME, ORDERCODE, A.SITECODE, B.DEPARTMENT 
+		 								FROM BM_DELIVERY_REQUEST A 
+		 								LEFT OUTER JOIN BM_SITECODE B ON A.SITECODE = B.SITECODE
+		 						) TT GROUP BY ORDERCODE, SITENAME, DEPARTMENT
+		 	) S ON a.OUTPUTCODE = S.ORDERCODE 
+		 	WHERE 1=1 
+			<include refid="goodsInOutWhere"></include>
+		) PP
+		WHERE ROWNUM BETWEEN #{beginNum} AND #{endNum}
+		ORDER BY ROWNUM	
+	</select>
+	
+	<select id="selectGoodsInOutListCount" parameterType="java.util.HashMap" resultType="int">
+	
+		SELECT COUNT(*) FROM BM_INOUT A INNER JOIN (
+										SELECT * FROM BM_PROD 
+										<if test="CATEIDX != null and CATEIDX !='' ">
+											WHERE CATEGORYID IN (
+																SELECT AM_IDX FROM BM_BOOK_CATEGORY 
+																WHERE AM_IDX IN 
+																<foreach collection="CATEIDX" item="IDX" index="index" separator="," open="(" close=")">
+																#{IDX}
+																</foreach>
+																OR 
+																AM_TOPIDX IN
+																<foreach collection="CATEIDX" item="IDX" index="index" separator="," open="(" close=")">
+																#{IDX}
+																</foreach>									
+																OR AM_TOPIDX IN (
+																					SELECT AM_IDX FROM BM_BOOK_CATEGORY 
+																					WHERE AM_TOPIDX IN 
+																					<foreach collection="CATEIDX" item="IDX" index="index" separator="," open="(" close=")">
+																						#{IDX}
+																					</foreach>
+																)
+			 								)
+										</if> 
+			) B ON A.PRODID = B.PRODID
+			
+		 	LEFT OUTER JOIN (
+		 						SELECT ADMINID, ADMINNAME, MAX(TEAMNAME) TEAMNAME 
+		 						FROM (
+		 								SELECT NAME ADMINNAME, USERID ADMINID, TEAMNAME 
+										FROM GW_SVR.GROUPWARE.DBO.MEMBER_VIEW 
+										WHERE GPCOMNUM='105-86-56986' 
+		 						) TT GROUP BY ADMINID, ADMINNAME
+		 						 
+		 	) C ON A.USERID = C.ADMINID 
+		 	WHERE 1=1 
+			<include refid="goodsInOutWhere"></include>
+	</select>
+	
+	
+	<select id="selectGoodsInOutListSum" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+	
+		SELECT T, CASE WHEN T='출고' Then SUM(CNT1) ELSE SUM(CNT2) END CNT ,
+					CASE WHEN T='출고' Then SUM(PRICE1) ELSE SUM(PRICE2) END PRICE
+					FROM (
+							SELECT RIGHT(INOUTTYPE,2) T,
+							CASE WHEN RIGHT(INOUTTYPE,2) = '출고' THEN SUM(CNT) ELSE 0 END CNT1 ,
+							CASE WHEN RIGHT(INOUTTYPE,2) = '출고' THEN SUM(PRICE*CNT) ELSE 0 END PRICE1 ,
+							CASE WHEN RIGHT(INOUTTYPE,2) = '입고' THEN SUM(CNT) ELSE 0 END CNT2,
+							CASE WHEN RIGHT(INOUTTYPE,2) = '입고' THEN SUM(PRICE*CNT) ELSE 0 END PRICE2  
+							FROM (
+									SELECT G.Name INOUTTYPE ,c.ADMINNAME , C.TEAMNAME  , A.MARKETER , F.CUSTOM_NAME , 
+											B.PRODNAME  , A.CNT ,  B.BUYPRICE PRICE,  D.NAME INCENTER,  E.NAME OUTCENTER
+									FROM BM_INOUT A INNER JOIN (
+										<include refid="cateidxSelect"></include>
+			) B ON A.PRODID = B.PRODID
+			LEFT OUTER JOIN ( SELECT OUTPUTCODE, DELIVERYTYPE FROM BM_OUTPUT) OT ON A.OUTPUTCODE=OT.OUTPUTCODE
+			LEFT OUTER JOIN BM_COMMON_CODE CD10 ON OT.DELIVERYTYPE = CD10.CMCODE
+			LEFT OUTER JOIN (
+								SELECT ORDERCODE, RECEIVER 
+								FROM BM_DELIVERY_REQUEST GROUP BY ORDERCODE, RECEIVER
+							) RQ ON A.OUTPUTCODE = RQ.ORDERCODE	
+		 	LEFT OUTER JOIN (
+		 						SELECT ADMINID, ADMINNAME, MAX(TEAMNAME) TEAMNAME 
+		 						FROM (
+		 								SELECT NAME ADMINNAME, USERID ADMINID, TEAMNAME 
+										FROM GW_SVR.GROUPWARE.DBO.MEMBER_VIEW 
+										WHERE GPCOMNUM='105-86-56986' 
+		 						) TT GROUP BY ADMINID, ADMINNAME
+		 						 
+		 	) C ON A.USERID = C.ADMINID 
+		 	LEFT OUTER JOIN BM_COMMON_CODE D ON A.INCENTER = D.CMCODE 
+		 	LEFT OUTER JOIN BM_COMMON_CODE E ON A.OUTCENTER = E.CMCODE 
+		 	LEFT OUTER JOIN ERP_SVR.ERP.DBO.B_CUSTOM F ON A.CUSTOMERCODE = F.CUSTOM_CODE 
+		 	LEFT OUTER JOIN BM_COMMON_CODE G ON A.INOUTTYPE = G.CMCODE 
+		 	LEFT OUTER JOIN ( 
+		 						SELECT SITENAME, ORDERCODE, DEPARTMENT 
+		 						FROM (
+		 								SELECT SITENAME, ORDERCODE, A.SITECODE, B.DEPARTMENT 
+		 								FROM BM_DELIVERY_REQUEST A 
+		 								LEFT OUTER JOIN BM_SITECODE B ON A.SITECODE = B.SITECODE
+		 						) TT GROUP BY ORDERCODE, SITENAME, DEPARTMENT
+		 	) S ON a.OUTPUTCODE = S.ORDERCODE 
+		 	WHERE 1=1 
+			<include refid="goodsInOutWhere"></include>
+			)P GROUP BY INOUTTYPE ) TT GROUP BY T ORDER BY T
+	</select>
+		
+	<select id="selectGoodsInOutXls" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+		SELECT COUNT(*) OVER() AS TOTALCNT,  ROW_NUMBER() OVER(ORDER BY A.IDX DESC) AS ROWNUM, 
+			<![CDATA[
+				CASE WHEN CHARINDEX('반품',G.NAME) >0 THEN 'orange'
+				WHEN CHARINDEX('입고',G.NAME) >0 THEN 'blue'
+				WHEN CHARINDEX('출고',G.NAME) >0 THEN 'red'
+				END	INOUTTEXT
+				, G.NAME INOUTTYPE 
+			 	, CASE WHEN C.ADMINNAME='' THEN
+			 		CASE WHEN USERID='LMS' THEN S.SITENAME ELSE 'BMS'  END
+			 	 ELSE C.ADMINNAME END ADMINNAME 
+			 	, CASE WHEN C.ADMINNAME='' THEN DEPARTMENT 
+			 		ELSE			 		 
+			 		 	CASE WHEN OT.MARKETER<>'' AND CHARINDEX(OT.MARKETER ,'이승주,김태헌,김보신,이상용')>0 THEN TC.TEAMNAME 
+			 		 	ELSE C.TEAMNAME 
+			 		 	END 
+			 		 
+			 		 END TEAMNAME 
+			 	, OT.MARKETER 
+			 	, F.CUSTOM_NAME 
+				, B.PRODNAME 
+				, A.CNT 
+				, A.DISPERCENT 
+				, B.BUYPRICE PRICE 
+				, A.CNT*B.BUYPRICE AS TOTALPRICE
+				, D.NAME INCENTER 
+			  	, E.NAME OUTCENTER 
+				, CONVERT(VARCHAR(10),REGDATE,120) REGDATE
+				, USERID
+				, A.PRODID 
+				, B.MAKECOM 
+			 	, A.INPUTCODE
+			 	, A.OUTPUTCODE
+			 	, CASE WHEN A.INPUTCODE='' THEN A.OUTPUTCODE ELSE A.INPUTCODE END CCODE
+			 	, CASE WHEN USERID='LMS' THEN S.SITENAME ELSE 'BMS'  END SITENAME
+			 	, CONVERT(VARCHAR(10),A.RECEIPTDATE ,120) RECEIPTDATE 
+			 	, DEPARTMENT 
+				, RECEIVER
+				, CD10.NAME DELIVERYTYPE
+				, TC.TEAMNAME AS TEAMNAME2
+				]]> 
+			FROM BM_INOUT A INNER JOIN (
+										<include refid="cateidxSelect"></include>
+			) B ON A.PRODID = B.PRODID
+			LEFT OUTER JOIN ( SELECT OUTPUTCODE, DELIVERYTYPE, MARKETER FROM BM_OUTPUT) OT ON A.OUTPUTCODE=OT.OUTPUTCODE
+			LEFT OUTER JOIN BM_COMMON_CODE CD10 ON OT.DELIVERYTYPE = CD10.CMCODE
+			LEFT OUTER JOIN (
+								SELECT ORDERCODE, RECEIVER 
+								FROM BM_DELIVERY_REQUEST GROUP BY ORDERCODE, RECEIVER
+							) RQ ON A.OUTPUTCODE = RQ.ORDERCODE	
+		 	LEFT OUTER JOIN (
+		 						SELECT ADMINID, ADMINNAME, MAX(TEAMNAME) TEAMNAME 
+		 						FROM (
+		 								SELECT NAME ADMINNAME, USERID ADMINID, TEAMNAME 
+										FROM GW_SVR.GROUPWARE.DBO.MEMBER_VIEW 
+										WHERE GPCOMNUM='105-86-56986' 
+		 						) TT GROUP BY ADMINID, ADMINNAME
+		 						 
+		 	) C ON A.USERID = C.ADMINID 
+		 	LEFT OUTER JOIN ( 
+		 						SELECT NAME ADMINNAME, USERID ADMINID, TEAMNAME 
+								FROM GW_SVR.GROUPWARE.DBO.MEMBER_VIEW 
+								WHERE GPCOMNUM='105-86-56986' 
+			) TC ON OT.MARKETER = TC.ADMINNAME
+		 	LEFT OUTER JOIN BM_COMMON_CODE D ON A.InCenter = D.CMCODE 
+		 	LEFT OUTER JOIN BM_COMMON_CODE E ON A.outCenter = E.CMCODE 
+		 	LEFT OUTER JOIN ERP_SVR.ERP.DBO.B_CUSTOM F ON A.CUSTOMERCODE = F.CUSTOM_CODE 
+		 	LEFT OUTER JOIN BM_COMMON_CODE G ON A.INOUTTYPE = G.CMCODE 
+		 	LEFT OUTER JOIN ( 
+		 						SELECT SITENAME, ORDERCODE, DEPARTMENT 
+		 						FROM (
+		 								SELECT SITENAME, ORDERCODE, A.SITECODE, B.DEPARTMENT 
+		 								FROM BM_DELIVERY_REQUEST A 
+		 								LEFT OUTER JOIN BM_SITECODE B ON A.SITECODE = B.SITECODE
+		 						) TT GROUP BY ORDERCODE, SITENAME, DEPARTMENT
+		 	) S ON a.OUTPUTCODE = S.ORDERCODE 
+		 	WHERE 1=1 
+			<include refid="goodsInOutWhere"></include>
+			ORDER BY A.IDX DESC
+	
+	</select>
+	
+	
+	<sql id="goodsInOutCenterDateWhere" >
+	<choose>
+				<when test="DAYTYPE == 'regdate' ">		
+				WHERE DATEDIFF(D,#{sdate},REGDATE)>=0 AND DATEDIFF(D,REGDATE,#{edate})>=0
+				</when>
+				<when test="DAYTYPE == 'receiptdate' ">		
+				WHERE DATEDIFF(D,#{sdate},RECEIPTDATE)>=0 AND DATEDIFF(D,RECEIPTDATE,#{edate})>=0
+				</when>
+				<otherwise>
+				WHERE DATEDIFF(D,#{sdate},REGDATE)>=0 AND DATEDIFF(D,REGDATE,#{edate})>=0
+				</otherwise>
+		</choose>
+	</sql>
+	
+	<sql id="goodsInOutCenterWhere">
+		<if test="searchKEYWORD != null and searchKEYWORD != '' and searchSELECT != null and searchSELECT != ''  ">
+			<choose>
+				<when test="searchSELECT == 'prodname' ">
+					AND PRODNAME LIKE '%'+#{searchKEYWORD}+'%'
+				</when>
+				<when test="searchSELECT == 'prodid' ">
+					AND PRODID LIKE '%'+#{searchKEYWORD}+'%'
+				</when>
+				<when test="searchSELECT == 'centername' ">
+					AND CC.NAME LIKE '%'+#{searchKEYWORD}+'%'
+				</when>			
+			</choose>
+		</if>
+		
+	</sql>
+	
+			
+	<select id="selectGoodsInOutCenterList" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+		
+		SELECT  * 
+		FROM (
+				SELECT ROW_NUMBER ( ) OVER (ORDER BY O.PRODID) ROWNUM, B.PRODID, B.PRODNAME, 
+						CC.NAME CENTER ,INCNT, OUTCNT, O.STDPRICE, O.SELLPRICE, ISNULL(C.CUSTOM_NAME,'일반고객') CUSTOM_NAME ,
+						B.BUYPRICE, B.MAKECOM, B.AMOUNT_REAL
+				FROM (
+						SELECT  PRODID, CENTER, SUM(INCNT) INCNT,
+								SUM(OUTCNT) OUTCNT,	SUM(STDPRICE) STDPRICE, SUM(SELLPRICE) SELLPRICE, CUSTOMERCODE
+						FROM (
+								SELECT PRODID, CASE WHEN INCENTER IS NULL THEN OUTCENTER ELSE INCENTER END CENTER, 
+										CASE WHEN INCENTER IS NOT NULL THEN SUM(CNT) ELSE 0 END INCNT,
+										CASE WHEN INCENTER IS NULL THEN SUM(CNT) ELSE 0 END OUTCNT ,
+										CASE WHEN INCENTER IS NOT NULL THEN STDPRICE ELSE 0 END STDPRICE,
+										CASE WHEN INCENTER IS NOT NULL THEN 0 ELSE BUYPRICE END SELLPRICE,
+										CUSTOMERCODE
+								FROM (
+										SELECT S.PRODID , CNT, P.STDPRICE ,P.BUYPRICE, S.SELLPRICE, OUTCENTER, INCENTER, CUSTOMERCODE
+										FROM  BM_INOUT S
+										INNER JOIN (
+													<include refid="cateidxSelect"></include>
+										) P ON S.PRODID = P.PRODID
+								<include refid="goodsInOutCenterDateWhere"></include> 
+								) TT GROUP BY PRODID,SELLPRICE,OUTCENTER,INCENTER,STDPRICE,BUYPRICE, CUSTOMERCODE
+						) PP GROUP BY PRODID, CENTER, CUSTOMERCODE
+				 	) O
+				 	LEFT OUTER JOIN BM_PROD B ON O.PRODID=B.PRODID
+				 	LEFT OUTER JOIN ERP_SVR.ERP.DBO.B_CUSTOM C ON O.CUSTOMERCODE = C.CUSTOM_CODE
+				 	LEFT OUTER JOIN BM_COMMON_CODE CC ON O.CENTER = CC.CMCODE
+				  	WHERE 1=1 
+				  	<include refid="goodsInOutCenterWhere"></include> 
+			) PP
+			WHERE ROWNUM BETWEEN #{beginNum} AND #{endNum}
+			ORDER BY ROWNUM	
+	</select>
+	
+	<select id="selectGoodsInOutCenterListCount" parameterType="java.util.HashMap" resultType="int">
+		SELECT COUNT(*)
+		FROM (
+				SELECT  PRODID, CENTER, SUM(INCNT) INCNT,
+						SUM(OUTCNT) OUTCNT,	SUM(STDPRICE) STDPRICE, SUM(SELLPRICE) SELLPRICE, CUSTOMERCODE
+				FROM (
+						SELECT PRODID, CASE WHEN INCENTER IS NULL THEN OUTCENTER ELSE INCENTER END CENTER, 
+								CASE WHEN INCENTER IS NOT NULL THEN SUM(CNT) ELSE 0 END INCNT,
+								CASE WHEN INCENTER IS NULL THEN SUM(CNT) ELSE 0 END OUTCNT ,
+								CASE WHEN INCENTER IS NOT NULL THEN STDPRICE ELSE 0 END STDPRICE,
+								CASE WHEN INCENTER IS NOT NULL THEN 0 ELSE BUYPRICE END SELLPRICE,
+								CUSTOMERCODE
+						FROM (
+								SELECT S.PRODID , CNT, P.STDPRICE ,P.BUYPRICE, S.SELLPRICE, OUTCENTER, INCENTER, CUSTOMERCODE
+								FROM  BM_INOUT S
+								INNER JOIN (
+											<include refid="cateidxSelect"></include>
+								) P ON S.PRODID = P.PRODID
+						<include refid="goodsInOutCenterDateWhere"></include> 
+						) TT GROUP BY PRODID,SELLPRICE,OUTCENTER,INCENTER,STDPRICE,BUYPRICE, CUSTOMERCODE
+				) PP GROUP BY PRODID, CENTER, CUSTOMERCODE
+		 	) O
+		 	LEFT OUTER JOIN BM_PROD B ON O.PRODID=B.PRODID
+		 	LEFT OUTER JOIN ERP_SVR.ERP.DBO.B_CUSTOM C ON O.CUSTOMERCODE = C.CUSTOM_CODE
+		 	LEFT OUTER JOIN BM_COMMON_CODE CC ON O.CENTER = CC.CMCODE
+		  	WHERE 1=1 
+		  	<include refid="goodsInOutCenterWhere"></include> 
+	</select>
+	
+	<select id="selectGoodsInOutCenterXls" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+		SELECT   COUNT(*) OVER() - ROW_NUMBER ( ) OVER (ORDER BY O.PRODID) +1 AS ROWNUM, B.PRODID, B.PRODNAME, CC.NAME CENTER ,INCNT, OUTCNT, O.STDPRICE, O.SELLPRICE, 
+				ISNULL(C.CUSTOM_NAME,'일반고객') CUSTOM_NAME , 	B.BUYPRICE, B.MAKECOM, B.AMOUNT_REAL,
+				INCNT*BUYPRICE TOTALBUYPRICE , OUTCNT*O.SELLPRICE TOTALOUTPRICE
+		FROM (
+				SELECT  PRODID, CENTER, SUM(INCNT) INCNT,
+						SUM(OUTCNT) OUTCNT,	SUM(STDPRICE) STDPRICE, SUM(SELLPRICE) SELLPRICE, CUSTOMERCODE
+				FROM (
+						SELECT PRODID, CASE WHEN INCENTER IS NULL THEN OUTCENTER ELSE INCENTER END CENTER, 
+								CASE WHEN INCENTER IS NOT NULL THEN SUM(CNT) ELSE 0 END INCNT,
+								CASE WHEN INCENTER IS NULL THEN SUM(CNT) ELSE 0 END OUTCNT ,
+								CASE WHEN INCENTER IS NOT NULL THEN STDPRICE ELSE 0 END STDPRICE,
+								CASE WHEN INCENTER IS NOT NULL THEN 0 ELSE BUYPRICE END SELLPRICE,
+								CUSTOMERCODE
+						FROM (
+								SELECT S.PRODID , CNT, P.STDPRICE ,P.BUYPRICE, S.SELLPRICE, OUTCENTER, INCENTER, CUSTOMERCODE
+								FROM  BM_INOUT S
+								INNER JOIN (
+								<include refid="cateidxSelect"></include>				 
+								) P ON S.PRODID = P.PRODID
+						<include refid="goodsInOutCenterDateWhere"></include> 
+						) TT GROUP BY PRODID,SELLPRICE,OUTCENTER,INCENTER,STDPRICE,BUYPRICE, CUSTOMERCODE
+				) PP GROUP BY PRODID, CENTER, CUSTOMERCODE
+		 	) O
+		 	LEFT OUTER JOIN BM_PROD B ON O.PRODID=B.PRODID
+		 	LEFT OUTER JOIN ERP_SVR.ERP.DBO.B_CUSTOM C ON O.CUSTOMERCODE = C.CUSTOM_CODE
+		 	LEFT OUTER JOIN BM_COMMON_CODE CC ON O.CENTER = CC.CMCODE
+		  	WHERE 1=1 
+		  	<include refid="goodsInOutCenterWhere"></include> 
+	</select>
+	
+	
+	<sql id="goodsMonthDoneWhere">
+		<if test="CENTERCODE !='' and CENTERCODE != null">
+			AND CENTERCODE = #{CENTERCODE}
+		</if>
+		
+		<if test="PYEAR !='' and PYEAR != null and PMONTH !='' and PMONTH != null">
+			AND EYEAR = #{PYEAR} AND EMONTH = #{PMONTH}
+		</if>
+				
+		<if test="searchKEYWORD != null and searchKEYWORD != '' and searchSELECT != null and searchSELECT != ''  ">
+			<choose>
+				<when test="searchSELECT == 'prodname' ">
+					AND PRODNAME LIKE '%'+#{searchKEYWORD}+'%'
+				</when>
+				<when test="searchSELECT == 'prodid' ">
+					AND M.PRODID LIKE '%'+#{searchKEYWORD}+'%'
+				</when>
+				<when test="searchSELECT == 'isbn' ">
+					AND ISBN LIKE '%'+#{searchKEYWORD}+'%'
+				</when>			
+			</choose>
+		</if>
+		
+	</sql>
+	<select id="selectGoodsMonthDoneListCount" parameterType="java.util.HashMap" resultType="int">
+		
+		SELECT COUNT(*)	FROM BM_MONTHDONE M 
+		INNER JOIN (
+				<include refid="cateidxSelect"></include>
+		) P ON M.PRODID = P.PRODID 
+		LEFT OUTER JOIN BM_COMMON_CODE C ON M.CENTERCODE = C.CMCODE 
+		WHERE 1=1
+		<include refid="goodsMonthDoneWhere" ></include>
+	</select>
+	
+	
+	<select id="selectGoodsMonthDoneList" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+		SELECT  * 
+		FROM (
+				SELECT ROW_NUMBER ( ) OVER (ORDER BY P.PRODID DESC) ROWNUM, 
+						EYEAR, EMONTH, CENTERCODE, PRODNAME, M.PRODID, TCNT, C.NAME AS CENTERNAME ,  M.BUYPRICE, 
+						P.CATEGORYID, M.IDX  
+			FROM BM_MONTHDONE M INNER JOIN (
+					<include refid="cateidxSelect"></include>
+			) P ON M.PRODID = P.PRODID 
+			LEFT OUTER JOIN BM_COMMON_CODE C
+		 	ON M.CENTERCODE = C.CMCODE 
+		 	WHERE 1=1
+		 	<include refid="goodsMonthDoneWhere" ></include>
+		 )PP
+		WHERE ROWNUM BETWEEN #{beginNum} AND #{endNum}
+		ORDER BY ROWNUM	 
+	</select>
+	
+	<update id="updateGoodsMonthDoneEdit" parameterType="java.util.HashMap">
+		UPDATE BM_MONTHDONE SET TCNT =#{TCNT} WHERE IDX =#{IDX}
+	
+	</update>
+	
+	
+	<select id="selectGoodsMonthDoneProdCount" parameterType="java.util.HashMap" resultType="int">
+		SELECT COUNT(PRODID) FROM BM_PROD WHERE PRODID = #{PRODID}
+	</select>
+	
+	<select id="selectGoodsMonthDoneProdDoubleCount" parameterType="java.util.HashMap" resultType="int">
+		SELECT COUNT(PRODID) FROM BM_MONTHDONE WHERE EYEAR=#{PYEAR} AND EMONTH=#{PMONTH} AND  PRODID = #{PRODID}
+	</select>
+	
+	<insert id="setGoodsMonthDoneProd" parameterType="java.util.HashMap">
+		INSERT INTO  BM_MONTHDONE 
+		SELECT EYEAR, EMONTH, CENTER, PRODID, CNT, BUYPRICE, REGDATE   
+		FROM (
+				SELECT #{PYEAR} EYEAR ,#{PMONTH} EMONTH ,'154001' CENTER ,#{APRODID} PRODID ,#{ACNT} CNT ,#{ABUYPRICE} BUYPRICE ,GETDATE() REGDATE 
+				UNION ALL		
+				SELECT #{PYEAR} EYEAR ,#{PMONTH} EMONTH ,'154002' CENTER ,#{APRODID} PRODID ,#{ACNT} CNT ,#{ABUYPRICE} BUYPRICE ,GETDATE() REGDATE
+		) TT
+		
+	
+	</insert>
+	
+	<select id="selectGoodsMonthTotalCheck" parameterType="java.util.HashMap" resultType="java.util.HashMap" >
+		SELECT PRODID, PRODNAME, BBOOK, BGOLD, LBOOK, LGOLD, INBOOK, INGOLD, OUTBOOK, OUTGOLD , AMOUNT_REAL,
+			<if test='TODAYCHECK =="Y"'>
+				 BBOOK + INBOOK - OUTBOOK  - AMOUNT_REAL AS DIFF
+			</if>
+			<if test='TODAYCHECK !="Y"'>
+				  BBOOK + INBOOK - OUTBOOK - LBOOK AS DIFF
+			</if>
+			
+		FROM (
+				SELECT A.PRODID, A.PRODNAME,	  ISNull(BBOOK,0) BBOOK, ISNull(BGOLD,0) BGOLD, ISNULL(LBOOK,0) LBOOK, 
+						ISNULL(LGOLD,0) LGOLD, ISNull(INBOOK,0) INBOOK ,ISNULL(INGOLD,0) INGOLD,
+						ISNULL(OUTBOOK,0) OUTBOOK , ISNULL(OUTGOLD,0) OUTGOLD, AMOUNT_REAL
+				FROM ( <include refid="cateidxSelect"></include>) A
+				LEFT OUTER JOIN (
+									SELECT PRODID, SUM(BBOOK) BBOOK, SUM(BGOLD) BGOLD 
+									FROM (	
+											SELECT PRODID, CASE WHEN CENTERCODE = 154001 THEN SUM(TCNT) ELSE 0 END BBOOK, 
+														CASE WHEN CENTERCODE=154002 THEN SUM(TCNT) ELSE 0 END BGOLD
+											FROM BM_MONTHDONE WHERE EYEAR = #{PYEAR} AND  EMONTH = #{PMONTH}
+											GROUP BY CENTERCODE, PRODID 
+									) T1 GROUP BY PRODID 
+				)M ON A.PRODID = M.PRODID
+				LEFT OUTER JOIN (
+									SELECT PRODID, SUM(BBOOK) LBOOK, SUM(BGOLD) LGOLD 
+									FROM (
+											SELECT PRODID, CASE WHEN CENTERCODE = 154001 THEN SUM(TCNT) ELSE 0 END BBOOK, 
+														CASE WHEN CENTERCODE=154002 THEN SUM(TCNT) ELSE 0 END BGOLD
+											FROM BM_MONTHDONE WHERE EYEAR = #{NYEAR}  AND EMONTH = #{NMONTH}
+											GROUP BY CENTERCODE, PRODID
+									) T1 GROUP BY PRODID
+				) F ON A.PRODID = F.PRODID
+				LEFT OUTER JOIN (
+									SELECT PRODID, SUM(INBOOK) INBOOK , SUM(INGOLD) INGOLD
+									FROM (
+											SELECT PRODID, CASE WHEN INCENTER = 154001 THEN SUM(CNT) ELSE 0 END INBOOK,
+															CASE WHEN INCENTER=154002 THEN SUM(CNT) ELSE 0 END INGOLD
+											FROM BM_INOUT 
+											WHERE OUTPUTCODE IS NULL AND DATEDIFF(M,REGDATE, #{SDATE}) = 0
+											GROUP BY PRODID, INCENTER 
+									) T2 GROUP BY PRODID
+						
+				) B ON A.PRODID = B.PRODID
+				LEFT OUTER JOIN (
+									SELECT PRODID, SUM(OUTBOOK) OUTBOOK, SUM(OUTGOLD) OUTGOLD
+									FROM (
+											SELECT PRODID, CASE WHEN OUTCENTER = 154001 THEN SUM(CNT) ELSE 0 END OUTBOOK,
+														CASE WHEN OUTCENTER=154002 THEN SUM(CNT) ELSE 0 END OUTGOLD
+											FROM BM_INOUT WHERE INPUTCODE IS NULL AND DATEDIFF(M,REGDATE, #{SDATE}) = 0
+											GROUP BY PRODID, OUTCENTER 
+									)T1 GROUP BY PRODID 
+				) C ON A.PRODID=C.PRODID ) TT 
+				
+				<if test='TODAYCHECK =="Y"'>
+					<![CDATA[
+ 					WHERE (ISNULL(BBOOK,0) + ISNULL(INBOOK,0) - ISNULL(OUTBOOK,0)  - AMOUNT_REAL) <>0  OR AMOUNT_REAL < 0
+ 					]]>  
+				</if>
+				<if test='TODAYCHECK !="Y"'>
+					<![CDATA[
+ 					WHERE (ISNULL(BBOOK,0) + ISNULL(INBOOK,0) - ISNULL(OUTBOOK,0)  - LBOOK) <> 0
+ 					]]> 
+				</if>
+ 				ORDER BY DIFF DESC 
+
+	</select>
+	
+	<select id="selectGoodsMonthTotalList" parameterType="java.util.HashMap" resultType="java.util.HashMap" >
+		SELECT  * FROM (
+							SELECT ROW_NUMBER() Over (ORDER BY PRODNAME ) AS ROWNUM, P.PRODID, MAKECOM, P.PRODNAME,P.BUYPRICE, 
+									
+									TG.BBOOK , BBOOK* P.BUYPRICE TBBOOKPRICE,
+									CASE WHEN G.INCNT>0 THEN P.BUYPRICE ELSE 0 END INPRICE,
+									ISNULL(G.INCNT,0) INCNT,
+									ISNULL(G.INCNT,0) * BUYPRICE TINPRICE,
+									ISNULL(G.INDCNT,0) INDCNT , 
+									CASE WHEN ISNULL(G.INDCNT,0)>0 THEN P.BUYPRICE ELSE 0 END INDPRICE,
+									ISNULL(G.INDCNT,0)*BUYPRICE TINDPRICE,
+									ISNULL(G.INCNT,0) + ISNULL(G.INDCNT,0) AINCNT,
+									CASE WHEN ISNULL(G.INCNT,0)+ISNULL(G.INDCNT,0)>0 THEN P.BUYPRICE ELSE 0 END INBUYPRICE,
+									(ISNULL(G.INCNT,0)+ISNULL(G.INDCNT,0))* P.BUYPRICE AINPRICE,
+									ISNULL(G.OUTCNT,0) OUTCNT ,
+									CASE WHEN ISNULL(G.OUTCNT,0) >0 THEN P.BUYPRICE ELSE 0 END OUTPRICE,
+									ISNULL(G.OUTCNT,0) * BUYPRICE TOUTPRICE,
+									ISNULL(G.OUTDCNT,0) OUTDCNT,
+									CASE WHEN ISNULL(G.OUTDCNT,0) > 0 THEN P.BUYPRICE ELSE 0 END OUTDPRICE,
+									ISNULL(G.OUTDCNT,0) * P.BUYPRICE TOUTDPRICE,
+									ISNULL(G.OUTCNT,0)+ISNULL(G.OUTDCNT,0) AOUTCNT,
+									CASE WHEN ISNULL(G.OUTCNT,0)+ISNULL(G.OUTDCNT,0)>0 THEN P.BUYPRICE ELSE 0 END OUTBUYPRICE,
+									(ISNULL(G.OUTCNT,0)+ISNULL(G.OUTDCNT,0))* P.BUYPRICE AOUTPRICE,
+									ISNULL(TG.MBOOK,0) MBOOK,
+									CASE WHEN ISNULL(TG.MBOOK,0)>0 THEN P.BUYPRICE ELSE 0 END  MPRICE,
+									ISNULL(TG.MBOOK,0) * P.BUYPRICE TMPRICE							
+									
+							FROM ( 
+									<include refid="cateidxSelect"></include>							
+							) P 																	
+		 					LEFT OUTER JOIN 
+							(
+		 						SELECT PRODID ,SUM(INCNT) INCNT ,SUM(INDCNT) INDCNT,SUM(OUTCNT) OUTCNT,SUM(OUTDCNT) OUTDCNT 
+		 						FROM (
+		 								SELECT PRODID,CASE WHEN INPUTCODE IS NOT NULL AND DIRECTSEND='N'  THEN	SUM(CNT) ELSE 0 END	INCNT,
+		 										CASE WHEN INPUTCODE IS NOT NULL AND DIRECTSEND='Y'  THEN SUM(CNT) ELSE 0 END INDCNT,
+		 										CASE WHEN OUTPUTCODE IS NOT NULL AND DIRECTSEND='N' THEN SUM(CNT) ELSE 0 END OUTCNT,
+		 										CASE WHEN OUTPUTCODE IS NOT NULL AND DIRECTSEND='Y' THEN SUM(CNT) ELSE 0 END OUTDCNT 
+		 								FROM BM_INOUT
+		 								WHERE ( INCENTER=154001 OR OUTCENTER=154001) AND DATEDIFF(M,REGDATE,#{SDATE})=0
+		 								GROUP BY PRODID, DIRECTSEND, INPUTCODE, OUTPUTCODE
+		 						)TG GROUP BY PRODID
+		 					) G ON P.PRODID=G.PRODID
+		 					LEFT OUTER JOIN
+		 					(
+		 						SELECT PRODID, SUM(MBOOK) MBOOK	, SUM(BBOOK) BBOOK
+		 						FROM (
+		 								SELECT PRODID ,	CASE WHEN EYEAR=#{PYEAR} AND EMONTH=#{PMONTH} THEN SUM(TCNT) ELSE 0	END	BBOOK,
+		 												CASE WHEN EYEAR=#{NYEAR} AND EMONTH=#{NMONTH} THEN SUM(TCNT) ELSE 0 END MBOOK
+		 								FROM BM_MONTHDONE
+		 								WHERE ((EYEAR = #{NYEAR} AND EMONTH =#{NMONTH}) OR (EYEAR = #{PYEAR} AND EMONTH=#{PMONTH})) 
+		 										AND CENTERCODE=154001
+		 								GROUP BY PRODID , EYEAR , EMONTH  
+		 						) T6
+		 						GROUP BY PRODID
+		 					)  TG ON P.PRODID=TG.PRODID
+						)ZZ WHERE ROWNUM BETWEEN #{beginNum} AND #{endNum}
+							ORDER BY ROWNUM	 
+	</select>
+	
+	
+	<select id="selectGoodsMonthTotalCount" parameterType="java.util.HashMap" resultType="java.util.HashMap" >
+		
+		SELECT COUNT(*) CNT,  SUM(BBOOK) BBOOK,SUM(MBOOK) MBOOK	,SUM(INCNT) INCNT	,
+				SUM(INDCNT) INDCNT	,SUM(OUTCNT) OUTCNT	,SUM(OUTDCNT) OUTDCNT, SUM(BBOOKCNT) BBOOKCNT, 
+				SUM(MBOOKCNT) MBOOKCNT, SUM(INCNTCNT) INCNTCNT, SUM(INDCNTCNT) INDCNTCNT, SUM(OUTCNTCNT) OUTCNTCNT,
+				SUM(OUTDCNTCNT) OUTDCNTCNT
+		 FROM ( 
+				SELECT 
+						SUM(ISNULL(TG.BBOOK, 0))*P.BUYPRICE BBOOK
+						,SUM(ISNULL(TG.MBOOK, 0))*P.BUYPRICE MBOOK
+						,SUM(ISNULL(G.INCNT, 0))*P.BUYPRICE INCNT
+						,SUM(ISNULL(G.INDCNT, 0))*P.BUYPRICE INDCNT
+						,SUM(ISNULL(G.OUTCNT, 0))*P.BUYPRICE OUTCNT
+						,SUM(ISNULL(OUTDCNT, 0))*P.BUYPRICE OUTDCNT 
+						,SUM(ISNULL(TG.BBOOK, 0)) BBOOKCNT
+						,SUM(ISNULL(TG.MBOOK, 0)) MBOOKCNT
+						,SUM(ISNULL(G.INCNT, 0)) INCNTCNT
+						,SUM(ISNULL(G.INDCNT, 0))INDCNTCNT
+						,SUM(ISNULL(G.OUTCNT, 0)) OUTCNTCNT
+						,SUM(ISNULL(OUTDCNT, 0)) OUTDCNTCNT
+				FROM (
+									<include refid="cateidxSelect"></include>							
+						) P 																	
+		 				LEFT OUTER JOIN 
+						(
+		 					SELECT PRODID ,SUM(INCNT) INCNT ,SUM(INDCNT) INDCNT,SUM(OUTCNT) OUTCNT,SUM(OUTDCNT) OUTDCNT 
+		 					FROM (
+		 							SELECT PRODID,CASE WHEN INPUTCODE IS NOT NULL AND DIRECTSEND='N'  THEN	SUM(CNT) ELSE 0 END	INCNT,
+		 									CASE WHEN INPUTCODE IS NOT NULL AND DIRECTSEND='Y'  THEN SUM(CNT) ELSE 0 END INDCNT,
+		 									CASE WHEN OUTPUTCODE IS NOT NULL AND DIRECTSEND='N' THEN SUM(CNT) ELSE 0 END OUTCNT,
+		 									CASE WHEN OUTPUTCODE IS NOT NULL AND DIRECTSEND='Y' THEN SUM(CNT) ELSE 0 END OUTDCNT 
+		 							FROM BM_INOUT
+		 							WHERE ( INCENTER=154001 OR OUTCENTER=154001) AND DATEDIFF(M,REGDATE,#{SDATE})=0
+		 							GROUP BY PRODID, DIRECTSEND, INPUTCODE, OUTPUTCODE
+		 					)TG GROUP BY PRODID
+		 				) G ON P.PRODID=G.PRODID
+		 				LEFT OUTER JOIN
+		 				(
+		 					SELECT PRODID, SUM(MBOOK) MBOOK	, SUM(BBOOK) BBOOK
+		 					FROM (
+		 							SELECT PRODID ,	CASE WHEN EYEAR=#{PYEAR} AND EMONTH=#{PMONTH} THEN SUM(TCNT) ELSE 0	END	BBOOK,
+		 											CASE WHEN EYEAR=#{NYEAR} AND EMONTH=#{NMONTH} THEN SUM(TCNT) ELSE 0 END MBOOK
+		 							FROM BM_MONTHDONE
+		 							WHERE ((EYEAR = #{NYEAR} AND EMONTH =#{NMONTH}) OR (EYEAR = #{PYEAR} AND EMONTH=#{PMONTH})) 
+		 									AND CENTERCODE=154001
+		 							GROUP BY PRODID , EYEAR , EMONTH  
+		 					) T6
+		 					GROUP BY PRODID
+		 				)  TG ON P.PRODID=TG.PRODID
+		 			GROUP BY P.BUYPRICE 
+		 		)TT
+	</select>
+	
+	<select id="selectGoodsMonthTotalListXls" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+		SELECT PRODID,MAKECOM, PRODNAME, BUYPRICE, BBOOK , BBOOK*BUYPRICE TBBOOKPRICE,
+		CASE WHEN INCNT>0 THEN BUYPRICE ELSE 0 END INPRICE,
+		INCNT,
+		INCNT*BUYPRICE TINPRICE,
+		INDCNT, 
+		CASE WHEN INDCNT>0 THEN BUYPRICE ELSE 0 END INDPRICE,
+		INDCNT*BUYPRICE TINDPRICE,
+		INCNT + INDCNT AINCNT,
+		CASE WHEN INCNT+INDCNT>0 THEN BUYPRICE ELSE 0 END INBUYPRICE,
+		(INCNT+INDCNT)*BUYPRICE AINPRICE,
+		OUTCNT,
+		CASE WHEN OUTCNT >0 THEN BUYPRICE ELSE 0 END OUTPRICE,
+		OUTCNT * BUYPRICE TOUTPRICE,
+		OUTDCNT,
+		CASE WHEN OUTDCNT > 0 THEN BUYPRICE ELSE 0 END OUTDPRICE,
+		OUTDCNT*BUYPRICE TOUTDPRICE,
+		OUTCNT+OUTDCNT AOUTCNT,
+		CASE WHEN OUTCNT+OUTDCNT>0 THEN BUYPRICE ELSE 0 END OUTBUYPRICE,
+		(OUTCNT+OUTDCNT)*BUYPRICE AOUTPRICE,
+		MBOOK,
+		CASE WHEN MBOOK>0 THEN BUYPRICE ELSE 0 END  MPRICE,
+		MBOOK*BUYPRICE TMPRICE
+				
+		FROM(
+				SELECT P.PRODID,MAKECOM, P.PRODNAME, ISNULL(P.BUYPRICE,0) BUYPRICE, ISNULL(TG.BBOOK,0) BBOOK , ISNULL(TG.MBOOK,0) MBOOK,
+						P.AMOUNT_REAL,ISNULL(G.INCNT,0) INCNT ,ISNULL(G.INDCNT,0) INDCNT , ISNULL(G.OUTCNT,0) OUTCNT, 
+						ISNULL(OUTDCNT,0) OUTDCNT 
+				FROM (<include refid="cateidxSelect"></include>	) p
+				LEFT OUTER JOIN(
+									SELECT PRODID ,SUM(INCNT) INCNT ,SUM(INDCNT) INDCNT,SUM(OUTCNT) OUTCNT,SUM(OUTDCNT) OUTDCNT 
+									FROM (
+											SELECT PRODID,CASE WHEN INPUTCODE IS NOT NULL AND DIRECTSEND='N'  THEN	SUM(CNT) ELSE 0	END	INCNT,
+												CASE WHEN INPUTCODE IS NOT NULL AND DIRECTSEND='Y'  THEN SUM(CNT) ELSE	0 	END INDCNT,
+												CASE WHEN OUTPUTCODE IS NOT NULL AND DIRECTSEND='N' THEN SUM(CNT) ELSE	0	END	OUTCNT,
+												CASE WHEN OUTPUTCODE IS NOT NULL AND DIRECTSEND='Y' THEN SUM(CNT) ELSE	0	END	OUTDCNT
+											FROM BM_INOUT
+											WHERE (INCENTER=154001 OR OUTCENTER=154001) AND DATEDIFF(M,REGDATE,#{SDATE})=0
+											GROUP BY PRODID,DIRECTSEND,INPUTCODE,OUTPUTCODE
+									)TG GROUP BY PRODID
+				) G ON P.PRODID=G.PRODID
+				LEFT OUTER JOIN(
+									SELECT PRODID, SUM(MBOOK) MBOOK	, SUM(BBOOK) BBOOK 
+									FROM (
+											SELECT PRODID ,	CASE WHEN EYEAR=#{PYEAR} AND EMONTH=#{PMONTH} THEN SUM(TCNT) ELSE 0 END BBOOK,
+															CASE WHEN EYEAR=#{NYEAR} AND EMONTH=#{NMONTH} THEN SUM(TCNT) ELSE 0	END	MBOOK
+											FROM BM_MONTHDONE
+											WHERE ((EYEAR = #{NYEAR} AND EMONTH = #{NMONTH}) OR (EYEAR = #{PYEAR} AND EMONTH = #{PMONTH})) AND
+													CENTERCODE = 154001
+											GROUP BY PRODID , EYEAR , EMONTH
+									) T6 GROUP BY PRODID
+				)  TG ON P.PRODID=TG.PRODID
+		)TT
+		ORDER BY INCNT DESC, OUTCNT DESC 
+	</select>
+		
+		
+	<select id="selectGroupWareTeamList" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+	
+		SELECT TEAMNAME FROM  GW_SVR.GROUPWARE.DBO.MEMBER_VIEW WHERE GPCODE = 'EPK'  GROUP BY TEAMNAME
+	
+	</select>
+	
+	<select id="selectGoodsInOutTeamListTotal" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+		SELECT TEAMNAME, ZZ.PRODID , PRODNAME, IP, OP, BUYPRICE 
+		FROM (	
+				SELECT TEAMNAME, PRODID, SUM(IP) IP, SUM(OP) OP
+				FROM(
+						SELECT TEAMNAME, PRODID, CASE WHEN INOUT='I' THEN IP ELSE 0 END IP, 
+								CASE WHEN INOUT='O' THEN IP ELSE 0 END OP  
+						FROM (
+								SELECT INOUT, USERID, PRODID, SUM(CNT) IP 
+								FROM (
+										SELECT CASE WHEN  OUTPUTCODE IS NULL THEN 'I' ELSE 'O' END INOUT, USERID, PRODID,
+												CNT 
+										FROM BM_INOUT 
+										<![CDATA[
+										WHERE USERID<>'LMS' AND DATEDIFF(D,#{sdate},REGDATE)>=0 AND DATEDIFF(D,REGDATE,#{edate})>=0
+										]]>
+								) TT 
+								GROUP BY INOUT, USERID, PRODID, CNT
+						) PP 
+						LEFT OUTER JOIN (
+											SELECT USERID ADMINID, TEAMNAME 
+											FROM GW_SVR.GROUPWARE.DBO.MEMBER_VIEW 
+											WHERE GPCOMNUM='105-86-56986' 
+											UNION ALL 
+											SELECT 'LMS'ADMINID,	'LMS' TEAMNAME 
+						) B ON PP.USERID=B.ADMINID 
+				) KK GROUP BY TEAMNAME, PRODID 
+		) ZZ INNER JOIN ( <include refid="cateidxSelect"></include> ) P ON ZZ.PRODID = P.PRODID 
+		WHERE 1=1 <include refid="inoutTeamWhere"></include>
+	</select>
+	
+	<select id="selectGoodsInOutTeamList" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+		SELECT  * 
+			FROM (
+					SELECT ROW_NUMBER() OVER(ORDER BY TEAMNAME DESC) AS ROWNUM, TEAMNAME, ZZ.PRODID , PRODNAME, IP, OP, BUYPRICE 
+					FROM (
+							SELECT TEAMNAME, PRODID, SUM(IP) IP, SUM(OP) OP
+							FROM (
+									SELECT TEAMNAME, PRODID, CASE WHEN INOUT='I' THEN IP ELSE 0 END IP, 
+											CASE WHEN INOUT='O' THEN IP ELSE 0 END OP
+									FROM (
+											SELECT INOUT, USERID, PRODID, SUM(CNT) IP
+											FROM (
+													SELECT CASE WHEN OUTPUTCODE IS NULL THEN 'I' ELSE 'O' END INOUT, USERID, PRODID, CNT
+													FROM BM_INOUT 
+													<![CDATA[
+													WHERE USERID <>'LMS'
+													AND DATEDIFF(D,#{sdate},REGDATE)>=0 AND DATEDIFF(D,REGDATE,#{edate})>=0
+													]]> 
+											) TT
+									GROUP BY INOUT,USERID,PRODID,CNT
+							) PP 
+							LEFT OUTER JOIN (
+												SELECT USERID ADMINID, TEAMNAME FROM GW_SVR.GROUPWARE.DBO.MEMBER_VIEW WHERE GPCODE = 'EPK'
+												UNION ALL
+												SELECT 'LMS','LMS'
+							) B ON PP.USERID = B.ADMINID
+					) KK GROUP BY TEAMNAME, PRODID
+						 
+				) ZZ INNER JOIN  ( <include refid="cateidxSelect"></include>) P ON ZZ.PRODID = P.PRODID 
+				WHERE 1=1 <include refid="inoutTeamWhere"></include>
+			)PP
+			WHERE ROWNUM BETWEEN #{beginNum} AND #{endNum}
+			ORDER BY ROWNUM	
+		
+	</select>
+	
+	
+	<select id="selectGoodsInOutTeamListCount" parameterType="java.util.HashMap" resultType="int">
+				SELECT COUNT(*) 
+				FROM (
+						SELECT TEAMNAME, PRODID, SUM(IP) IP, SUM(OP) OP
+						FROM (
+								SELECT TEAMNAME, PRODID, CASE WHEN INOUT='I' THEN IP ELSE 0 END IP, 
+										CASE WHEN INOUT='O' THEN IP ELSE 0 END OP
+								FROM (
+										SELECT INOUT, USERID, PRODID, SUM(CNT) IP 
+										FROM (
+												SELECT CASE WHEN OUTPUTCODE IS NULL THEN 'I' ELSE 'O' END INOUT, USERID, PRODID, CNT
+												FROM BM_INOUT 
+												<![CDATA[
+												WHERE USERID <>'LMS' AND DATEDIFF(D,#{sdate},REGDATE)>=0 AND DATEDIFF(D,REGDATE,#{edate})>=0
+												]]> 
+										) TT
+								GROUP BY INOUT,USERID,PRODID,CNT
+						) PP 
+						LEFT OUTER JOIN (
+											SELECT USERID ADMINID, TEAMNAME FROM GW_SVR.GROUPWARE.DBO.MEMBER_VIEW WHERE GPCODE = 'EPK'
+											UNION ALL
+											SELECT 'LMS','LMS'
+						) B ON PP.USERID = B.ADMINID
+				) KK GROUP BY TEAMNAME, PRODID
+					 
+			) ZZ INNER JOIN  ( <include refid="cateidxSelect"></include>) P ON ZZ.PRODID = P.PRODID 
+			WHERE 1=1 <include refid="inoutTeamWhere"></include>
+	</select>	
+	
+	<sql id="inoutTeamWhere">	
+		
+		<if test="searchKEYWORD != null and searchKEYWORD != '' ">
+			<choose>
+				<when test="searchSELECT == 'prodid' ">
+					AND ZZ.PRODID LIKE '%'+#{searchKEYWORD}+'%'
+				</when>
+				<when test="searchSELECT == 'prodname' ">
+					AND ZZ.PRODNAME LIKE '%'+#{searchKEYWORD}+'%'
+				</when>
+				<when test="searchSELECT == 'isbn' ">
+					AND ZZ.ISBN LIKE '%'+#{searchKEYWORD}+'%'
+				</when>
+			</choose>
+		</if>
+		<if test="TEAMNAME != null and	TEAMNAME != '' ">
+			AND TEAMNAME  = #{TEAMNAME}
+		</if>		
+		
+	</sql>
+	
+	
+	
+	
+	<select id="selectGoodsMonthTeamListCount" parameterType="java.util.HashMap" resultType="int">
+			SELECT COUNT(*)
+				FROM  ( <include refid="cateidxSelect"></include>	) a 
+	 			LEFT OUTER JOIN (
+	 								SELECT PRODID, SUM(TCNT) BBOOK FROM BM_MONTHDONE
+	 								WHERE CENTERCODE = 154001 AND EYEAR = #{PYEAR} AND EMONTH = #{PMONTH}
+	 								GROUP BY PRODID
+				) m ON A.PRODID = m.PRODID
+				LEFT OUTER JOIN (
+									SELECT PRODID, SUM(CNT) INBOOK
+									FROM BM_INOUT 
+									<![CDATA[
+									WHERE OUTPUTCODE IS NULL AND USERID <>'LMS' And INCENTER =154001 AND DATEDIFF(M,REGDATE,#{SDATE})=0
+									]]> 
+									GROUP BY PRODID
+				) B ON A.PRODID = B.PRODID
+				LEFT OUTER JOIN (
+									SELECT PRODID, SUM(E1) E1,SUM(E2) E2,SUM(C1) C1,SUM(C2) C2,SUM(FN) FN,SUM(SC) SC,SUM(MN) MN,SUM(JB) JB
+									FROM (
+											SELECT PRODID,
+													CASE WHEN B.TEAMNAME='교육사업1팀' THEN SUM(CNT) ELSE 0 END E1,
+													CASE WHEN B.TEAMNAME='교육사업2팀' THEN SUM(CNT) ELSE 0 END E2,
+													CASE WHEN B.TEAMNAME='법인영업1팀' THEN SUM(CNT) ELSE 0 END C1,
+													CASE WHEN B.TEAMNAME='법인영업2팀' THEN SUM(CNT) ELSE 0 END C2,
+													CASE WHEN B.TEAMNAME='에프앤주식회사' OR B.TEAMNAME='교육사업팀(FN)'  THEN SUM(CNT) ELSE 0 END FN,
+													CASE WHEN B.TEAMNAME='학원사업팀' THEN SUM(CNT) ELSE 0 END SC,
+													CASE WHEN B.TEAMNAME='경영실' THEN SUM(CNT) ELSE 0 END MN,
+													<![CDATA[
+													CASE WHEN B.TEAMNAME='취업&마케팅' THEN SUM(CNT) ELSE 0 END JB
+													]]> 
+											FROM(
+													SELECT * FROM BM_INOUT
+													<![CDATA[
+													WHERE OUTPUTCODE IS NOT NULL AND USERID<>'LMS' AND OUTCENTER =154001 AND DATEDIFF(M,REGDATE,#{SDATE})=0
+													]]>
+											) A
+											LEFT OUTER JOIN GW_SVR.GROUPWARE.DBO.MEMBER_VIEW B ON A.USERID = B.USERID  
+											GROUP BY PRODID, TEAMNAME
+									) TT GROUP BY PRODID
+				) Z ON A.PRODID = Z.PRODID
+				LEFT OUTER JOIN (
+									SELECT PRODID, SUM(CNT) CNT 
+									FROM BM_INOUT
+									WHERE INOUTTYPE='157002' AND DATEDIFF(M,REGDATE,#{SDATE})=0
+									GROUP BY PRODID 
+				) X ON A.PRODID = X.PRODID
+				LEFT OUTER JOIN (
+									SELECT PRODID, SUM(CNT) CNT
+									FROM BM_INOUT
+									WHERE INOUTTYPE='156002' AND DATEDIFF(M,REGDATE,#{SDATE})=0 
+									GROUP BY PRODID
+				)Y ON A.PRODID  = Y.PRODID 
+	</select>
+	
+	<select id="selectGoodsMonthTeamList" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+		SELECT * 
+		FROM (
+				SELECT ROW_NUMBER() OVER(ORDER BY PRODNAME DESC) AS ROWNUM, A.PRODID, 
+						A.PRODNAME, A.MAKECOM, A.BUYPRICE, 
+						ISNULL(BBOOK,0) BBOOK, ISNULL(INBOOK,0) INBOOK,
+						ISNULL(Z.E1,0) E1,  <!-- 교육육사업1팀-->
+						ISNULL(Z.E2,0) E2,  <!-- '교육사업2팀-->
+						ISNULL(Z.C1,0) C1, <!--'법인영업1팀-->
+						ISNULL(Z.C2,0) C2, <!--'법인영업2팀-->
+						ISNULL(Z.FN,0) FN, <!--'FN-->
+						ISNULL(Z.SC,0) SC, <!--'학원사업팀-->
+						ISNULL(Z.MN,0) MN, <!--'경영-->
+						ISNULL(Z.JB,0) JB, <!--' 취업마케팅-->
+						ISNULL(X.CNT,0) XCNT,
+						ISNULL(Y.CNT,0) YCNT,
+						AMOUNT_REAL 
+				FROM  ( <include refid="cateidxSelect"></include>	) a 
+	 			LEFT OUTER JOIN (
+	 								SELECT PRODID, SUM(TCNT) BBOOK FROM BM_MONTHDONE
+	 								WHERE CENTERCODE = 154001 AND EYEAR = #{PYEAR} AND EMONTH = #{PMONTH}
+	 								GROUP BY PRODID
+				) m ON A.PRODID = m.PRODID
+				LEFT OUTER JOIN (
+									SELECT PRODID, SUM(CNT) INBOOK
+									FROM BM_INOUT 
+									<![CDATA[
+									WHERE OUTPUTCODE IS NULL AND USERID <>'LMS' And INCENTER =154001 AND DATEDIFF(M,REGDATE,#{SDATE})=0
+									]]> 
+									GROUP BY PRODID
+				) B ON A.PRODID = B.PRODID
+				LEFT OUTER JOIN (
+									SELECT PRODID, SUM(E1) E1,SUM(E2) E2,SUM(C1) C1,SUM(C2) C2,SUM(FN) FN,SUM(SC) SC,SUM(MN) MN,SUM(JB) JB
+									FROM (
+											SELECT PRODID,
+													CASE WHEN B.TEAMNAME='교육사업1팀' THEN SUM(CNT) ELSE 0 END E1,
+													CASE WHEN B.TEAMNAME='교육사업2팀' THEN SUM(CNT) ELSE 0 END E2,
+													CASE WHEN B.TEAMNAME='법인영업1팀' THEN SUM(CNT) ELSE 0 END C1,
+													CASE WHEN B.TEAMNAME='법인영업2팀' THEN SUM(CNT) ELSE 0 END C2,
+													CASE WHEN B.TEAMNAME='에프앤주식회사' OR B.TEAMNAME='교육사업팀(FN)'  THEN SUM(CNT) ELSE 0 END FN,
+													CASE WHEN B.TEAMNAME='학원사업팀' THEN SUM(CNT) ELSE 0 END SC,
+													CASE WHEN B.TEAMNAME='경영실' THEN SUM(CNT) ELSE 0 END MN,
+													<![CDATA[
+													CASE WHEN B.TEAMNAME='취업&마케팅' THEN SUM(CNT) ELSE 0 END JB
+													]]> 
+											FROM(
+													SELECT * FROM BM_INOUT
+													<![CDATA[
+													WHERE OUTPUTCODE IS NOT NULL AND USERID<>'LMS' AND OUTCENTER =154001 AND DATEDIFF(M,REGDATE,#{SDATE})=0
+													]]>
+											) A
+											LEFT OUTER JOIN GW_SVR.GROUPWARE.DBO.MEMBER_VIEW B ON A.USERID = B.USERID  
+											GROUP BY PRODID, TEAMNAME
+									) TT GROUP BY PRODID
+				) Z ON A.PRODID = Z.PRODID
+				LEFT OUTER JOIN (
+									SELECT PRODID, SUM(CNT) CNT 
+									FROM BM_INOUT
+									WHERE INOUTTYPE='157002' AND DATEDIFF(M,REGDATE,#{SDATE})=0
+									GROUP BY PRODID 
+				) X ON A.PRODID = X.PRODID
+				LEFT OUTER JOIN (
+									SELECT PRODID, SUM(CNT) CNT
+									FROM BM_INOUT
+									WHERE INOUTTYPE='156002' AND DATEDIFF(M,REGDATE,#{SDATE})=0 
+									GROUP BY PRODID
+				)Y ON A.PRODID  = Y.PRODID 
+			)ZZ WHERE ROWNUM BETWEEN #{beginNum} AND #{endNum}
+			ORDER BY ROWNUM	
+	</select>
+	
+	
+	
+	<select id="selectGoodsMonthTeamListExcel" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+		SELECT PRODID, PRODNAME, MAKECOM, BUYPRICE, BBOOK, BBOOK * BUYPRICE TBBOOK, INBOOK, INBOOK*BUYPRICE TINBOOK,
+				E1, E1*BUYPRICE TE1 , E2 , E2 * BUYPRICE TE2, C1, C1*BUYPRICE TC1, C2, C2*BUYPRICE TC2,
+				SC, SC*BUYPRICE TSC, JB , JB*BUYPRICE TJB, FN, FN*BUYPRICE TFN, MN, MN*BUYPRICE TMN,
+				E1+E2+C1+C2+SC+JB+FN+MN TCNT,  (E1+E2+C1+C2+SC+JB+FN+MN)*BUYPRICE TPRICE,
+				XCNT, XCNT*BUYPRICE TX , YCNT, YCNT*BUYPRICE TY, AMOUNT_REAL, AMOUNT_REAL*BUYPRICE TREALPRICE
+		FROM (
+				SELECT  A.PRODID, 
+						A.PRODNAME, A.MAKECOM, A.BUYPRICE, 
+						ISNULL(BBOOK,0) BBOOK, ISNULL(INBOOK,0) INBOOK,
+						ISNULL(Z.E1,0) E1,  <!-- 교육육사업1팀-->
+						ISNULL(Z.E2,0) E2,  <!-- '교육사업2팀-->
+						ISNULL(Z.C1,0) C1, <!--'법인영업1팀-->
+						ISNULL(Z.C2,0) C2, <!--'법인영업2팀-->
+						ISNULL(Z.FN,0) FN, <!--'FN-->
+						ISNULL(Z.SC,0) SC, <!--'학원사업팀-->
+						ISNULL(Z.MN,0) MN, <!--'경영-->
+						ISNULL(Z.JB,0) JB, <!--' 취업마케팅-->
+						ISNULL(X.CNT,0) XCNT,
+						ISNULL(Y.CNT,0) YCNT,
+						AMOUNT_REAL 
+				FROM  ( <include refid="cateidxSelect"></include>	) a 
+	 			LEFT OUTER JOIN (
+	 								SELECT PRODID, SUM(TCNT) BBOOK FROM BM_MONTHDONE
+	 								WHERE CENTERCODE = 154001 AND EYEAR = #{PYEAR} AND EMONTH = #{PMONTH}
+	 								GROUP BY PRODID
+				) m ON A.PRODID = m.PRODID
+				LEFT OUTER JOIN (
+									SELECT PRODID, SUM(CNT) INBOOK
+									FROM BM_INOUT 
+									<![CDATA[
+									WHERE OUTPUTCODE IS NULL AND USERID <>'LMS' And INCENTER =154001 AND DATEDIFF(M,REGDATE,#{SDATE})=0
+									]]> 
+									GROUP BY PRODID
+				) B ON A.PRODID = B.PRODID
+				LEFT OUTER JOIN (
+									SELECT PRODID, SUM(E1) E1,SUM(E2) E2,SUM(C1) C1,SUM(C2) C2,SUM(FN) FN,SUM(SC) SC,SUM(MN) MN,SUM(JB) JB
+									FROM (
+											SELECT PRODID,
+													CASE WHEN B.TEAMNAME='교육사업1팀' THEN SUM(CNT) ELSE 0 END E1,
+													CASE WHEN B.TEAMNAME='교육사업2팀' THEN SUM(CNT) ELSE 0 END E2,
+													CASE WHEN B.TEAMNAME='법인영업1팀' THEN SUM(CNT) ELSE 0 END C1,
+													CASE WHEN B.TEAMNAME='법인영업2팀' THEN SUM(CNT) ELSE 0 END C2,
+													CASE WHEN B.TEAMNAME='에프앤주식회사' OR B.TEAMNAME='교육사업팀(FN)'  THEN SUM(CNT) ELSE 0 END FN,
+													CASE WHEN B.TEAMNAME='학원사업팀' THEN SUM(CNT) ELSE 0 END SC,
+													CASE WHEN B.TEAMNAME='경영실' THEN SUM(CNT) ELSE 0 END MN,
+													<![CDATA[
+													CASE WHEN B.TEAMNAME='취업&마케팅' THEN SUM(CNT) ELSE 0 END JB
+													]]> 
+											FROM(
+													SELECT * FROM BM_INOUT
+													<![CDATA[
+													WHERE OUTPUTCODE IS NOT NULL AND USERID<>'LMS' AND OUTCENTER =154001 AND DATEDIFF(M,REGDATE,#{SDATE})=0
+													]]>
+											) A
+											LEFT OUTER JOIN GW_SVR.GROUPWARE.DBO.MEMBER_VIEW B ON A.USERID = B.USERID  
+											GROUP BY PRODID, TEAMNAME
+									) TT GROUP BY PRODID
+				) Z ON A.PRODID = Z.PRODID
+				LEFT OUTER JOIN (
+									SELECT PRODID, SUM(CNT) CNT 
+									FROM BM_INOUT
+									WHERE INOUTTYPE='157002' AND DATEDIFF(M,REGDATE,#{SDATE})=0
+									GROUP BY PRODID 
+				) X ON A.PRODID = X.PRODID
+				LEFT OUTER JOIN (
+									SELECT PRODID, SUM(CNT) CNT
+									FROM BM_INOUT
+									WHERE INOUTTYPE='156002' AND DATEDIFF(M,REGDATE,#{SDATE})=0 
+									GROUP BY PRODID
+				)Y ON A.PRODID  = Y.PRODID
+			)TT
+	</select>
+	
+	<sql id="resendDateWhere">
+		AND DATEDIFF(D,#{sdate},REGDATE)>=0 AND DATEDIFF(D,REGDATE,#{edate})>=0
+	</sql>
+	<sql id="resendSearchWhere">
+		<if test="searchKEYWORD != null and searchKEYWORD != '' ">
+			<choose>
+				<when test="searchKEYWORD == 'prodid' ">
+					AND PRODID LIKE '%'+#{searchKEYWORD}+'%'
+				</when>
+				<when test="searchKEYWORD == 'prodname' ">
+					AND PRODNAME LIKE '%'+#{searchKEYWORD}+'%'
+				</when>
+				<when test="searchKEYWORD == 'adminname' ">
+					AND ADMINNAME LIKE '%'+#{searchKEYWORD}+'%'
+				</when>
+				<when test="searchKEYWORD == 'teamname' ">
+					AND TEAMNAME LIKE '%'+#{searchKEYWORD}+'%'
+				</when>
+				<when test="searchKEYWORD == 'comment' ">
+					AND COMMENT LIKE '%'+#{searchKEYWORD}+'%'
+				</when>
+				<when test="searchKEYWORD == 'rereceiver' ">
+					AND RERECEIVER LIKE '%'+#{searchKEYWORD}+'%'
+				</when>
+				
+			</choose>
+		</if>		
+	</sql>
+	
+	<select id="selectGoodsResendListCount" parameterType="java.util.HashMap" resultType="int">
+	
+				SELECT COUNT(*) 
+				FROM (
+					SELECT '157002' T, TT.PRODID, PRODNAME, MAKECOM, TEAMNAME, ADMINNAME, MARKETER, 
+							COMMENT, RERECEIVER, CUSTOMER,
+							INCENTER CENTER, P.STDPRICE, P.BUYPRICE, P.DISPERCENT, CNT, TT.REGDATE
+					FROM (
+							SELECT PRODID, INPUTCODE, USERID, CNT, REGDATE 
+							FROM BM_INOUT
+							WHERE INOUTTYPE ='157002' 
+							<include refid="resendDateWhere"></include>					
+							
+					) TT
+					LEFT OUTER JOIN BM_INPUT I ON TT.INPUTCODE = I.INPUTCODE
+					INNER JOIN ( <include refid="cateidxSelect"></include> ) P On TT.PRODID = P.PRODID
+					LEFT OUTER JOIN	 ( 
+										SELECT NAME ADMINNAME, USERID ADMINID, TEAMNAME 
+										FROM GW_SVR.GROUPWARE.DBO.MEMBER_VIEW 
+										WHERE GPCOMNUM='105-86-56986' 
+					) M ON TT.USERID = M.ADMINID
+					UNION ALL
+					SELECT '156002' T, UU.PRODID, PRODNAME, MAKECOM, TEAMNAME, ADMINNAME, MARKETER, COMMENT,'' RERECEIVER,
+							'' CUSTOMER, OUTCENTER CENTER, P.STDPRICE, P.BUYPRICE, P.DISPERCENT, CNT, UU.REGDATE
+					FROM (
+							SELECT PRODID, OUTPUTCODE, USERID, SUM(CNT) CNT, REGDATE
+			 				FROM (
+			 						SELECT PRODID, OUTPUTCODE, USERID, CNT, REGDATE
+			 						FROM BM_INOUT
+			 						WHERE INOUTTYPE ='156002' 
+									<include refid="resendDateWhere"></include>
+			 				) TT GROUP BY PRODID, OUTPUTCODE, USERID, REGDATE
+			 		)UU
+					LEFT OUTER JOIN BM_OUTPUT O ON UU.OUTPUTCODE = O.OUTPUTCODE
+					INNER JOIN ( <include refid="cateidxSelect"></include>) P ON UU.PRODID = P.PRODID	
+					LEFT OUTER JOIN (
+										SELECT NAME ADMINNAME, USERID ADMINID, TEAMNAME 
+										FROM GW_SVR.GROUPWARE.DBO.MEMBER_VIEW 
+										WHERE GPCOMNUM='105-86-56986' 
+					) M ON UU.UserID=M.AdminID	
+				) FF  
+				LEFT OUTER JOIN ERP_SVR.ERP.DBO.B_CUSTOM C ON FF.CUSTOMER = C.CUSTOM_CODE
+				LEFT OUTER JOIN BM_COMMON_CODE CC ON FF.CENTER = CC.CMCODE
+				WHERE 1=1
+				<include refid="resendSearchWhere"></include>
+		
+			
+	</select>
+	<select id="selectGoodsResendList" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+		SELECT  ROWNUM, T, PRODID,PRODNAME,MAKECOM, TEAMNAME, ADMINNAME, MARKETER,
+				COMMENT,RERECEIVER, CUSTOM_NAME,CENTERNAME CENTER,  STDPRICE , 
+				CASE WHEN RIN =0 THEN 0 ELSE BUYPRICE END BUYPRICE , BUYPRICE SELLPRICE, DISPERCENT, RIN, ROUT,REGDATE 
+		FROM (
+				SELECT ROW_NUMBER() OVER(ORDER BY REGDATE DESC) AS ROWNUM,  T, PRODID, PRODNAME, 
+						MAKECOM, TEAMNAME, ADMINNAME, MARKETER, COMMENT, RERECEIVER,  C.CUSTOM_NAME,
+						CC.NAME CENTERNAME, STDPRICE, BUYPRICE, DISPERCENT, CASE WHEN T='157002' THEN CNT ELSE 0 END RIN,
+						CASE WHEN T='156002' THEN CNT ELSE 0 END ROUT, CONVERT(VARCHAR(10),REGDATE ,120) REGDATE 
+				FROM (
+					SELECT '157002' T, TT.PRODID, PRODNAME, MAKECOM, TEAMNAME, ADMINNAME, MARKETER, COMMENT, RERECEIVER, CUSTOMER,
+							INCENTER CENTER, P.STDPRICE, P.BUYPRICE, P.DISPERCENT, CNT, TT.REGDATE
+					FROM (
+							SELECT PRODID, INPUTCODE, USERID, CNT, REGDATE 
+							FROM BM_INOUT
+							WHERE INOUTTYPE ='157002' 
+							<include refid="resendDateWhere"></include>					
+							
+					) TT
+					LEFT OUTER JOIN BM_INPUT I ON TT.INPUTCODE = I.INPUTCODE
+					INNER JOIN ( <include refid="cateidxSelect"></include> ) P On TT.PRODID = P.PRODID
+					LEFT OUTER JOIN	 ( 
+										SELECT NAME ADMINNAME, USERID ADMINID, TEAMNAME 
+										FROM GW_SVR.GROUPWARE.DBO.MEMBER_VIEW 
+										WHERE GPCOMNUM='105-86-56986' 
+					) M ON TT.USERID = M.ADMINID
+					UNION ALL
+					SELECT '156002' T, UU.PRODID, PRODNAME, MAKECOM, TEAMNAME, ADMINNAME, MARKETER, COMMENT,'' RERECEIVER,
+							'' CUSTOMER, OUTCENTER CENTER, P.STDPRICE, P.BUYPRICE, P.DISPERCENT, CNT, UU.REGDATE
+					FROM (
+							SELECT PRODID, OUTPUTCODE, USERID, SUM(CNT) CNT, REGDATE
+			 				FROM (
+			 						SELECT PRODID, OUTPUTCODE, USERID, CNT, REGDATE
+			 						FROM BM_INOUT
+			 						WHERE INOUTTYPE ='156002' 
+									<include refid="resendDateWhere"></include>
+			 				) TT GROUP BY PRODID, OUTPUTCODE, USERID, REGDATE
+			 		)UU
+					LEFT OUTER JOIN BM_OUTPUT O ON UU.OUTPUTCODE = O.OUTPUTCODE
+					INNER JOIN ( <include refid="cateidxSelect"></include>) P ON UU.PRODID = P.PRODID	
+					LEFT OUTER JOIN (
+										SELECT NAME ADMINNAME, USERID ADMINID, TEAMNAME 
+										FROM GW_SVR.GROUPWARE.DBO.MEMBER_VIEW 
+										WHERE GPCOMNUM='105-86-56986' 
+					) M ON UU.UserID=M.AdminID	
+				) FF  
+				LEFT OUTER JOIN ERP_SVR.ERP.DBO.B_CUSTOM C ON FF.CUSTOMER = C.CUSTOM_CODE
+				LEFT OUTER JOIN BM_COMMON_CODE CC ON FF.CENTER = CC.CMCODE
+				WHERE 1=1
+				<include refid="resendSearchWhere"></include>
+		)ZZ WHERE ROWNUM BETWEEN #{beginNum} AND #{endNum}
+			ORDER BY ROWNUM	
+			
+	</select>
+	<select id="selectGoodsResendListXls" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+		SELECT T, PRODID,PRODNAME,MAKECOM, TEAMNAME, ADMINNAME, MARKETER, COMMENT,RERECEIVER, CUSTOM_NAME, CENTERNAME, 
+				CASE WHEN ROUT=0 THEN 0 ELSE STDPRICE END STDPRICE, CASE WHEN RIN =0 THEN 0 ELSE BUYPRICE END BUYPRICE,
+				 BUYPRICE SELLPRICE,	DISPERCENT, RIN, ROUT,REGDATE, 
+				RIN*BUYPRICE INPRICE , ROUT*BUYPRICE OUTPRICE
+		FROM(
+			SELECT  T, PRODID, PRODNAME, MAKECOM, TEAMNAME, ADMINNAME, MARKETER, COMMENT, RERECEIVER,  C.CUSTOM_NAME,
+					CC.NAME CENTERNAME, STDPRICE, BUYPRICE, DISPERCENT, CASE WHEN T='157002' THEN CNT ELSE 0 END RIN,
+					CASE WHEN T='156002' THEN CNT ELSE 0 END ROUT, CONVERT(VARCHAR(10),REGDATE ,120) REGDATE 
+			FROM (
+					SELECT '157002' T, TT.PRODID, PRODNAME, MAKECOM, TEAMNAME, ADMINNAME, MARKETER, COMMENT, RERECEIVER, CUSTOMER,
+							INCENTER CENTER, P.STDPRICE, P.BUYPRICE, P.DISPERCENT, CNT, TT.REGDATE
+					FROM (
+							SELECT PRODID, INPUTCODE, USERID, CNT, REGDATE 
+							FROM BM_INOUT
+							WHERE INOUTTYPE ='157002' 
+							<include refid="resendDateWhere"></include>					
+					) TT
+					LEFT OUTER JOIN BM_INPUT I ON TT.INPUTCODE = I.INPUTCODE
+					INNER JOIN ( <include refid="cateidxSelect"></include> ) P On TT.PRODID = P.PRODID
+					LEFT OUTER JOIN	 ( 
+										SELECT NAME ADMINNAME, USERID ADMINID, TEAMNAME 
+										FROM GW_SVR.GROUPWARE.DBO.MEMBER_VIEW 
+										WHERE GPCOMNUM='105-86-56986' 
+					) M ON TT.USERID = M.ADMINID
+					UNION ALL
+					SELECT '156002' T, UU.PRODID, PRODNAME, MAKECOM, TEAMNAME, ADMINNAME, MARKETER, COMMENT,'' RERECEIVER,
+							'' CUSTOMER, OUTCENTER CENTER, P.STDPRICE, P.BUYPRICE, P.DISPERCENT, CNT, UU.REGDATE
+					FROM (
+							SELECT PRODID, OUTPUTCODE, USERID, SUM(CNT) CNT, REGDATE
+			 				FROM (
+			 						SELECT PRODID, OUTPUTCODE, USERID, CNT, REGDATE
+			 						FROM BM_INOUT
+			 						WHERE INOUTTYPE ='156002' 
+									<include refid="resendDateWhere"></include>
+			 				) TT GROUP BY PRODID, OUTPUTCODE, USERID, REGDATE
+			 		)UU
+					LEFT OUTER JOIN BM_OUTPUT O ON UU.OUTPUTCODE = O.OUTPUTCODE
+					INNER JOIN ( <include refid="cateidxSelect"></include>) P ON UU.PRODID = P.PRODID	
+					LEFT OUTER JOIN (
+										SELECT NAME ADMINNAME, USERID ADMINID, TEAMNAME 
+										FROM GW_SVR.GROUPWARE.DBO.MEMBER_VIEW 
+										WHERE GPCOMNUM='105-86-56986' 
+					) M ON UU.UserID=M.AdminID	
+			) FF  
+			LEFT OUTER JOIN ERP_SVR.ERP.DBO.B_CUSTOM C ON FF.CUSTOMER = C.CUSTOM_CODE
+			LEFT OUTER JOIN BM_COMMON_CODE CC ON FF.CENTER = CC.CMCODE
+			WHERE 1=1
+			<include refid="resendSearchWhere"></include>
+		)TT
+	</select>
+	
+	
+	
+	<sql id="taxDateWhere">
+		AND (
+				(DATEDIFF(D,#{sdate},RECEIPTDATE)>=0 AND DATEDIFF(D,RECEIPTDATE,#{edate})>=0) 
+				OR (DATEDIFF(D,#{sdate},REGDATE)>=0 AND DATEDIFF(D,REGDATE,#{edate})>=0)
+		)
+	</sql>
+	
+	<select id="selectGoodsTaxListCount" parameterType="java.util.HashMap" resultType="int">
+		SELECT COUNT(*) 
+		FROM(
+				SELECT PRODID, CUSTOMERCODE, 
+						SUM(CASE WHEN DATEDIFF(D,#{sdate},RECEIPTDATE)>=0 AND DATEDIFF(D,RECEIPTDATE,#{edate})>=0 THEN CNT ELSE 0 END ) BILL,
+						SUM(CASE WHEN DATEDIFF(D,#{sdate},REGDATE)>=0 AND DATEDIFF(D,REGDATE,#{edate})>=0 THEN CNT ELSE 0 END) REG 
+				FROM BM_INOUT WHERE INPUTCODE IS NOT NULL AND INOUTTYPE='157001'
+				<include refid="taxDateWhere"></include>
+				GROUP BY PRODID, CUSTOMERCODE
+		) A 
+	 	INNER JOIN (<include refid="cateidxSelect"></include>)B ON A.PRODID = B.PRODID
+	 	LEFT OUTER JOIN ERP_SVR.ERP.DBO.B_CUSTOM F ON A.CUSTOMERCODE = F.CUSTOM_CODE 
+	 	
+	</select>
+	
+	<select id="selectGoodsTaxList" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+		SELECT * 
+		FROM (	
+				SELECT ROW_NUMBER() OVER(ORDER BY A.PRODID) AS ROWNUM, A.PRODID, B.PRODNAME, 
+						B.MAKECOM, F.CUSTOM_NAME,B.BUYPRICE, A.BILL, A.REG 
+				FROM ( 
+				 		SELECT PRODID, CUSTOMERCODE, 
+				 				SUM(CASE WHEN DATEDIFF(D,#{sdate},RECEIPTDATE)>=0 AND DATEDIFF(D,RECEIPTDATE,#{edate})>=0 THEN CNT ELSE 0 END ) BILL,
+								SUM(CASE WHEN DATEDIFF(D,#{sdate},REGDATE)>=0 AND DATEDIFF(D,REGDATE,#{edate})>=0 THEN CNT ELSE 0 END) REG 
+				 		FROM BM_INOUT WHERE INPUTCODE IS NOT NULL AND INOUTTYPE='157001'
+				 		 <include refid="taxDateWhere"></include>  
+						GROUP BY PRODID, CUSTOMERCODE
+				) A 
+				INNER JOIN (<include refid="cateidxSelect"></include>)B ON A.PRODID = B.PRODID
+				LEFT OUTER JOIN ERP_SVR.ERP.DBO.B_CUSTOM F ON A.CUSTOMERCODE = F.CUSTOM_CODE 
+		)ZZ WHERE ROWNUM BETWEEN #{beginNum} AND #{endNum}
+			ORDER BY ROWNUM	
+	</select>
+	
+	<select id="selectGoodsTaxListXls" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+		SELECT  ROW_NUMBER() OVER(ORDER BY A.PRODID) AS ROWNUM, A.PRODID, B.PRODNAME, 
+						B.MAKECOM, F.CUSTOM_NAME,B.BUYPRICE, A.BILL, A.REG , (B.BUYPRICE*A.BILL) TBILL, (B.BUYPRICE*A.REG)TREG
+				FROM ( 
+				 		SELECT PRODID, CUSTOMERCODE, 
+				 				SUM(CASE WHEN DATEDIFF(D,#{sdate},RECEIPTDATE)>=0 AND DATEDIFF(D,RECEIPTDATE,#{edate})>=0 THEN CNT ELSE 0 END ) BILL,
+								SUM(CASE WHEN DATEDIFF(D,#{sdate},REGDATE)>=0 AND DATEDIFF(D,REGDATE,#{edate})>=0 THEN CNT ELSE 0 END) REG 
+				 		FROM BM_INOUT WHERE INPUTCODE IS NOT NULL AND INOUTTYPE='157001'
+				 		 <include refid="taxDateWhere"></include>  
+						GROUP BY PRODID, CUSTOMERCODE
+				) A 
+				INNER JOIN (<include refid="cateidxSelect"></include>)B ON A.PRODID = B.PRODID
+				LEFT OUTER JOIN ERP_SVR.ERP.DBO.B_CUSTOM F ON A.CUSTOMERCODE = F.CUSTOM_CODE 
+	</select>
+	
+	<select id="selectGoodsTaxSum" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+		SELECT ISNULL(SUM(BILL*BUYPRICE),0) SUMBILL, ISNUll(SUM(REG*BUYPRICE),0) SUMREG
+		FROM (
+				SELECT PRODID, CUSTOMERCODE, 
+						SUM(CASE WHEN DATEDIFF(D,#{sdate},RECEIPTDATE)>=0 AND DATEDIFF(D,RECEIPTDATE,#{edate})>=0 THEN CNT ELSE 0 END ) BILL,
+						SUM(CASE WHEN DATEDIFF(D,#{sdate},REGDATE)>=0 AND DATEDIFF(D,REGDATE,#{edate})>=0 THEN CNT ELSE 0 END) REG
+				FROM BM_INOUT 
+				WHERE INPUTCODE IS NOT NULL AND INOUTTYPE='157001'
+				<include refid="taxDateWhere"></include>  
+				GROUP BY PRODID, CUSTOMERCODE
+		) A 
+		INNER JOIN ( <include refid="cateidxSelect"></include>)B ON A.PRODID = B.PRODID
+	 	LEFT OUTER JOIN ERP_SVR.ERP.DBO.B_CUSTOM F ON A.CUSTOMERCODE = F.CUSTOM_CODE 
+	</select>
+	
+	
+	
+	<sql id="managerInOutWhere">
+		<if test="searchKEYWORD != null and searchKEYWORD != '' and searchSELECT != null and searchSELECT != ''  ">
+			<choose>
+				<when test="searchSELECT == 'teamname' ">
+					AND C.TEAMNAME LIKE '%'+#{searchKEYWORD}+'%'
+				</when>
+				<when test="searchSELECT == 'adminname' ">
+					AND C.ADMINNAME LIKE '%'+#{searchKEYWORD}+'%'
+				</when>
+				<when test="searchSELECT == 'marketer' ">
+					AND A.MARKETER LIKE '%'+#{searchKEYWORD}+'%'
+				</when>
+				<when test="searchSELECT == 'prodname' ">
+					AND B.PRODNAME LIKE '%'+#{searchKEYWORD}+'%'
+				</when>
+				<when test="searchSELECT == 'prodid' ">
+					AND A.PRODID LIKE '%'+#{searchKEYWORD}+'%'
+				</when>
+				<when test="searchSELECT == 'outputcode' ">
+					AND A.OUTPUTCODE LIKE '%'+#{searchKEYWORD}+'%'
+				</when>
+				<when test="searchSELECT == 'inputcode' ">
+					AND A.INPUTCODE LIKE '%'+#{searchKEYWORD}+'%'
+				</when>
+				<when test="searchSELECT == 'incenter' ">
+					AND D.NAME LIKE '%'+#{searchKEYWORD}+'%'
+				</when>
+				<when test="searchSELECT == 'outcenter' ">
+					AND E.NAME LIKE '%'+#{searchKEYWORD}+'%'
+				</when>
+				
+			</choose>
+		</if>
+		<choose>
+				<when test="DAYTYPE == 'regdate' ">		
+				AND DATEDIFF(D,#{sdate},REGDATE)>=0 AND DATEDIFF(D,REGDATE,#{edate})>=0
+				</when>
+				<when test="DAYTYPE == 'receiptdate' ">		
+				AND DATEDIFF(D,#{sdate},RECEIPTDATE)>=0 AND DATEDIFF(D,RECEIPTDATE,#{edate})>=0
+				</when>
+				<otherwise>
+				AND DATEDIFF(D,#{sdate},REGDATE)>=0 AND DATEDIFF(D,REGDATE,#{edate})>=0
+				</otherwise>
+		</choose>
+		<if test="INOUT =='input'">
+			AND A.INPUTCODE IS NOT NULL
+		</if>
+		<if test="INOUT =='output'">
+			AND A.OUTPUTCODE IS NOT NULL
+		</if>
+		
+	</sql>
+	
+	<select id="selectManagerInOutListCount" parameterType="java.util.HashMap" resultType="int">
+			SELECT  COUNT(*) FROM BM_INOUT A
+			INNER JOIN (<include refid="cateidxSelect"></include>) B ON A.PRODID = B.PRODID
+			INNER JOIN (
+							SELECT PRODID FROM BM_BOOK_MANAGER 
+							WHERE USERID = #{ADMINID} 
+			) M ON B.PRODID =M.PRODID
+			LEFT OUTER JOIN (
+								SELECT ADMINID, ADMINNAME, MAX(TEAMNAME) TEAMNAME 
+								FROM(
+										SELECT NAME ADMINNAME, USERID ADMINID, TEAMNAME 
+										FROM GW_SVR.GROUPWARE.DBO.MEMBER_VIEW 
+										WHERE GPCOMNUM='105-86-56986' 
+										
+								) TT GROUP BY ADMINID, ADMINNAME			 
+			 ) C ON A.USERID = C.ADMINID  <!-- 신청자명-->
+			 LEFT OUTER JOIN BM_COMMON_CODE D ON A.INCENTER = D.CMCODE <!--  입고처-->
+			 LEFT OUTER JOIN BM_COMMON_CODE E ON A.OUTCENTER = E.CMCODE <!--   출고처-->
+			 LEFT OUTER JOIN ERP_SVR.ERP.DBO.B_CUSTOM F ON A.CUSTOMERCODE = F.CUSTOM_CODE <!-- 거래처-->
+			 LEFT OUTER JOIN BM_COMMON_CODE G ON A.INOUTTYPE = G.CMCODE <!--  입출고종류-->
+			 LEFT OUTER JOIN ( 
+			 					SELECT SITENAME , ORDERCODE 
+			 					FROM (
+			 							SELECT SITENAME, ORDERCODE, A.SITECODE 
+			 							FROM BM_DELIVERY_REQUEST A
+			 							LEFT OUTER JOIN BM_SITECODE B ON A.SITECODE = B.SITECODE
+			 					) TT GROUP BY ORDERCODE, SITENAME
+			 ) S ON A.OUTPUTCODE = S.ORDERCODE  
+			 WHERE 1=1 
+			 <include refid="managerInOutWhere"></include>
+	
+	</select>
+	<select id="selectManagerInOutList" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+		SELECT  ROWNUM,INOUTTEXT, INOUTTYPE, ADMINNAME, TEAMNAME, MARKETER, CUSTOM_NAME, PRODNAME, CNT, 
+				DISPERCENT, PRICE , INCENTER, OUTCENTER , REGDATE, USERID, PRODID, MAKECOM, 
+				CASE WHEN INPUTCODE IS NULL THEN OUTPUTCODE ELSE INPUTCODE END CCODE, SITENAME, RECEIPTDATE
+		FROM (	
+			SELECT   ROW_NUMBER() OVER(ORDER BY A.IDX DESC) AS ROWNUM, 
+					CASE WHEN A.INPUTCODE IS NULL THEN 'blue' ELSE 'red' END INOUTTEXT, G.NAME INOUTTYPE, C.ADMINNAME, 
+					C.TEAMNAME,	A.MARKETER, F.CUSTOM_NAME, B.PRODNAME, A.CNT, A.DISPERCENT, b.BUYPRICE PRICE, D.NAME INCENTER,
+					E.NAME OUTCENTER, REGDATE, USERID, A.PRODID, B.MAKECOM, A.INPUTCODE, A.OUTPUTCODE, S.SITENAME, 
+					CASE WHEN CONVERT(VARCHAR(10),A.RECEIPTDATE,120) ='1900-01-01' THEN '' ELSE CAST(A.RECEIPTDATE AS VARCHAR) END RECEIPTDATE
+			FROM BM_INOUT A
+			INNER JOIN (<include refid="cateidxSelect"></include>) B ON A.PRODID = B.PRODID
+			INNER JOIN (
+							SELECT PRODID FROM BM_BOOK_MANAGER 
+							WHERE USERID = #{ADMINID}
+			) M ON B.PRODID =M.PRODID
+			LEFT OUTER JOIN (
+								SELECT ADMINID, ADMINNAME, MAX(TEAMNAME) TEAMNAME 
+								FROM(
+										SELECT NAME ADMINNAME, USERID ADMINID, TEAMNAME 
+										FROM GW_SVR.GROUPWARE.DBO.MEMBER_VIEW 
+										WHERE GPCOMNUM='105-86-56986' 
+										
+								) TT GROUP BY ADMINID, ADMINNAME			 
+			 ) C ON A.USERID = C.ADMINID  <!-- 신청자명-->
+			 LEFT OUTER JOIN BM_COMMON_CODE D ON A.INCENTER = D.CMCODE <!--  입고처-->
+			 LEFT OUTER JOIN BM_COMMON_CODE E ON A.OUTCENTER = E.CMCODE <!--   출고처-->
+			 LEFT OUTER JOIN ERP_SVR.ERP.DBO.B_CUSTOM F ON A.CUSTOMERCODE = F.CUSTOM_CODE <!-- 거래처-->
+			 LEFT OUTER JOIN BM_COMMON_CODE G ON A.INOUTTYPE = G.CMCODE <!--  입출고종류-->
+			 LEFT OUTER JOIN ( 
+			 					SELECT SITENAME , ORDERCODE 
+			 					FROM (
+			 							SELECT SITENAME, ORDERCODE, A.SITECODE 
+			 							FROM BM_DELIVERY_REQUEST A
+			 							LEFT OUTER JOIN BM_SITECODE B ON A.SITECODE = B.SITECODE
+			 					) TT GROUP BY ORDERCODE, SITENAME
+			 ) S ON A.OUTPUTCODE = S.ORDERCODE  
+			 WHERE 1=1 
+			 <include refid="managerInOutWhere"></include>
+		)ZZ WHERE ROWNUM BETWEEN #{beginNum} AND #{endNum}
+			ORDER BY ROWNUM	
+	</select>
+	
+	<select id="selectManagerInOutListXls" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+	SELECT ROWNUM, INOUTTEXT, INOUTTYPE, ADMINNAME, TEAMNAME, MARKETER, CUSTOM_NAME, PRODNAME, CNT, 
+				DISPERCENT, PRICE , INCENTER, OUTCENTER , REGDATE, USERID, PRODID, MAKECOM, 
+				CASE WHEN INPUTCODE IS NULL THEN OUTPUTCODE ELSE INPUTCODE END CCODE, SITENAME, RECEIPTDATE
+		FROM (	
+			SELECT  ROW_NUMBER() OVER(ORDER BY A.IDX DESC) AS ROWNUM, 
+					CASE WHEN A.INPUTCODE IS NULL THEN '출고' ELSE '입고' END INOUTTEXT, G.NAME INOUTTYPE, C.ADMINNAME, 
+					C.TEAMNAME,	A.MARKETER, F.CUSTOM_NAME, B.PRODNAME, A.CNT, A.DISPERCENT, b.BUYPRICE PRICE, D.NAME INCENTER,
+					E.NAME OUTCENTER, REGDATE, USERID, A.PRODID, B.MAKECOM, A.INPUTCODE, A.OUTPUTCODE, S.SITENAME, 
+					A.RECEIPTDATE  
+			FROM BM_INOUT A
+			INNER JOIN (<include refid="cateidxSelect"></include>) B ON A.PRODID = B.PRODID
+			INNER JOIN (
+							SELECT PRODID FROM BM_BOOK_MANAGER 
+							 WHERE USERID = #{ADMINID}
+			) M ON B.PRODID =M.PRODID
+			LEFT OUTER JOIN (
+								SELECT ADMINID, ADMINNAME, MAX(TEAMNAME) TEAMNAME 
+								FROM(
+										SELECT NAME ADMINNAME, USERID ADMINID, TEAMNAME 
+										FROM GW_SVR.GROUPWARE.DBO.MEMBER_VIEW 
+										WHERE GPCOMNUM='105-86-56986' 
+										
+								) TT GROUP BY ADMINID, ADMINNAME			 
+			 ) C ON A.USERID = C.ADMINID  <!-- 신청자명-->
+			 LEFT OUTER JOIN BM_COMMON_CODE D ON A.INCENTER = D.CMCODE <!--  입고처-->
+			 LEFT OUTER JOIN BM_COMMON_CODE E ON A.OUTCENTER = E.CMCODE <!--   출고처-->
+			 LEFT OUTER JOIN ERP_SVR.ERP.DBO.B_CUSTOM F ON A.CUSTOMERCODE = F.CUSTOM_CODE <!-- 거래처-->
+			 LEFT OUTER JOIN BM_COMMON_CODE G ON A.INOUTTYPE = G.CMCODE <!--  입출고종류-->
+			 LEFT OUTER JOIN ( 
+			 					SELECT SITENAME , ORDERCODE 
+			 					FROM (
+			 							SELECT SITENAME, ORDERCODE, A.SITECODE 
+			 							FROM BM_DELIVERY_REQUEST A
+			 							LEFT OUTER JOIN BM_SITECODE B ON A.SITECODE = B.SITECODE
+			 					) TT GROUP BY ORDERCODE, SITENAME
+			 ) S ON A.OUTPUTCODE = S.ORDERCODE  
+			 WHERE 1=1 
+			 <include refid="managerInOutWhere"></include>
+		)ZZ	
+	</select>
+	
+	<select id="selectManagerInOutListSum" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+			SELECT T, CASE WHEN T='출고' THEN SUM(CNT1) ELSE SUM(CNT2) END CNT , 
+	 			CASE WHEN T='출고' THEN SUM(PRICE1) ELSE SUM(PRICE2) End PRICE
+	 		FROM (
+	 				SELECT RIGHT(INOUTTYPE,2) T, CASE WHEN RIGHT(INOUTTYPE,2) = '출고' THEN SUM(CNT) ELSE 0 END CNT1,
+	 						CASE WHEN RIGHT(INOUTTYPE,2) = '출고' THEN SUM(PRICE * CNT ) ELSE 9 END PRICE1,
+	 						CASE WHEN RIGHT(INOUTTYPE,2) = '입고' THEN SUM(CNT)  ELSE 0 END CNT2,
+	 						CASE WHEN RIGHT(INOUTTYPE,2) = '입고' THEN SUM(PRICE*CNT) ELSE 0 END PRICE2  
+	 				FROM (
+	 						SELECT G.NAME INOUTTYPE , C.ADMINNAME, C.TEAMNAME, A.MARKETER , F.CUSTOM_NAME, B.PRODNAME, 
+	 								A.CNT,  B.BUYPRICE PRICE,  D.NAME INCENTER,  E.NAME OUTCENTER
+	 						FROM BM_INOUT A
+							INNER JOIN (<include refid="cateidxSelect"></include>) B ON A.PRODID = B.PRODID
+							INNER JOIN (
+											SELECT PRODID FROM BM_BOOK_MANAGER 
+											WHERE USERID = #{ADMINID} 
+							) M ON B.PRODID =M.PRODID
+							LEFT OUTER JOIN (
+												SELECT ADMINID, ADMINNAME, MAX(TEAMNAME) TEAMNAME 
+												FROM(
+														SELECT NAME ADMINNAME, USERID ADMINID, TEAMNAME 
+														FROM GW_SVR.GROUPWARE.DBO.MEMBER_VIEW 
+														WHERE GPCOMNUM='105-86-56986' 
+												) TT GROUP BY ADMINID, ADMINNAME
+							) C ON A.USERID = C.ADMINID  <!-- 신청자명-->
+					 		LEFT OUTER JOIN BM_COMMON_CODE D ON A.INCENTER = D.CMCODE <!--  입고처-->
+					 		LEFT OUTER JOIN BM_COMMON_CODE E ON A.OUTCENTER = E.CMCODE <!--   출고처-->
+					 		LEFT OUTER JOIN ERP_SVR.ERP.DBO.B_CUSTOM F ON A.CUSTOMERCODE = F.CUSTOM_CODE <!-- 거래처-->
+					 		LEFT OUTER JOIN BM_COMMON_CODE G ON A.INOUTTYPE = G.CMCODE <!--  입출고종류-->
+					 		LEFT OUTER JOIN ( 
+					 							SELECT SITENAME , ORDERCODE 
+			 									FROM (
+			 											SELECT SITENAME, ORDERCODE, A.SITECODE 
+					 									FROM BM_DELIVERY_REQUEST A
+					 									LEFT OUTER JOIN BM_SITECODE B ON A.SITECODE = B.SITECODE
+			 									) TT GROUP BY ORDERCODE, SITENAME
+			 				) S ON A.OUTPUTCODE = S.ORDERCODE  
+			 				WHERE 1=1 
+							 <include refid="managerInOutWhere"></include>
+	 				) P 
+	 				GROUP BY INOUTTYPE
+	 		) TT GROUP BY T ORDER BY T
+	</select>
+	
+	
+	<select id="selectDepartmentListXls" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+		SELECT *
+		FROM (
+			SELECT ROW_NUMBER() OVER (
+					ORDER BY BMS.PRODID ASC
+					) AS ROWNUM
+				,PRODNAME
+				,AA
+				,A
+				,AB
+				,B
+				,AC
+				,C
+				,AD
+				,D
+				,AE
+				,E
+				,TOTAL
+			FROM (
+				SELECT PRODID
+					,ROUND(SUM(A) / CAST(SUM(TOTAL) AS FLOAT) * 100, 2) AA
+					,SUM(A) A
+					,ROUND(SUM(B) / CAST(SUM(TOTAL) AS FLOAT) * 100, 2) AB
+					,SUM(B) B
+					,ROUND(SUM(C) / CAST(SUM(TOTAL) AS FLOAT) * 100, 2) AC
+					,SUM(C) C
+					,ROUND(SUM(D) / CAST(SUM(TOTAL) AS FLOAT) * 100, 2) AD
+					,SUM(D) D
+					,ROUND(SUM(E) / CAST(SUM(TOTAL) AS FLOAT) * 100, 2) AE
+					,SUM(E) E
+					,SUM(TOTAL) TOTAL
+				FROM (
+					SELECT PRODID
+						,SUM(CASE 
+								WHEN TEAMNAME = '교육사업1팀'
+									THEN CNT
+								ELSE 0
+								END) A
+						,SUM(CASE 
+								WHEN TEAMNAME = '교육사업2팀'
+									THEN CNT
+								ELSE 0
+								END) B
+						,SUM(CASE 
+								WHEN TEAMNAME = '법인영업1팀'
+									THEN CNT
+								ELSE 0
+								END) C
+						,SUM(CASE 
+								WHEN TEAMNAME = '법인영업2팀'
+									THEN CNT
+								ELSE 0
+								END) D
+						,SUM(CASE 
+								WHEN TEAMNAME = '학원사업팀'
+									THEN CNT
+								ELSE 0
+								END) E
+						,SUM(CNT) TOTAL
+					FROM (
+						SELECT PRODID
+							,TEAMNAME
+							,SUM(CNT) CNT
+						FROM (
+							SELECT USERID
+								,PRODID
+								,SUM(CNT) CNT
+							FROM (
+								SELECT A.USERID
+									,B.PRODID
+									,B.CNT
+								FROM BM_OUTPUT A
+								INNER JOIN BM_OUTPUTPROD B ON A.OUTPUTCODE = B.OUTPUTCODE
+								LEFT OUTER JOIN (
+									SELECT A.ORDERCODE
+										,A.STATUS
+										,B.DELIVERY_NUM
+									FROM BM_DELIVERY_REQUEST A
+									INNER JOIN BM_DELIVERY_RESPONSE B ON A.DR_IDX = B.DR_IDX
+									WHERE DELIVERY_NUM IS NOT NULL
+										AND B.STATUS = '03'
+									) DR ON A.OUTPUTCODE = DR.ORDERCODE
+								WHERE A.OUTCENTER = '154001'
+									AND A.DATA_STATUS = '155003'
+									AND B.DATA_STATUS = '155003'
+									<include refid="inventoryWhere"></include>
+								) TT
+							GROUP BY USERID
+								,PRODID
+							) BMS
+						LEFT OUTER JOIN (
+											SELECT USERID ADMINID, MIN(TEAMNAME) TEAMNAME 
+											FROM GW_SVR.GROUPWARE.DBO.MEMBER_VIEW 
+											WHERE GPCODE = 'EPK' OR GPCODE = '003'
+											GROUP BY USERID
+						) GW ON BMS.USERID = GW.ADMINID
+						GROUP BY TEAMNAME
+							,PRODID
+						) TT
+					GROUP BY TEAMNAME
+						,PRODID
+					) KK
+				GROUP BY PRODID
+				) BMS
+			INNER JOIN BM_PROD P ON BMS.PRODID = P.PRODID
+			WHERE P.CATEGORYID NOT IN (10323)
+			) PP
+	</select>
+	
+	<select id="selectSiteInventoryListXls" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+		<![CDATA[
+		SELECT *
+		FROM (
+			SELECT ROW_NUMBER() OVER (
+					ORDER BY BMS.PRODID ASC
+					) AS ROWNUM
+				,PRODNAME
+				,B2BA
+				,B2B
+				,B2CA
+				,B2C
+				,TOTAL
+			FROM (
+				SELECT T.PRODID
+					,Convert(VARCHAR, ROUND((CAST(SUM(T.B2B) AS FLOAT) / CAST(SUM(T.TOTAL) AS FLOAT)) * 100, 2)) AS B2BA
+					,Convert(VARCHAR, SUM(T.B2B)) AS B2B
+					,Convert(VARCHAR, ROUND((CAST(SUM(T.B2C) AS FLOAT) / CAST(SUM(T.TOTAL) AS FLOAT)) * 100, 2)) AS B2CA
+					,Convert(VARCHAR, SUM(T.B2C)) AS B2C
+					,Convert(VARCHAR, SUM(T.TOTAL)) AS TOTAL
+				FROM (
+					SELECT S.PRODID
+						,SUM(CASE 
+								WHEN LEN(S.SITECODE) = 5
+									THEN S.CNT
+								ELSE 0
+								END) AS B2B
+						,SUM(CASE 
+								WHEN LEN(S.SITECODE) = 6
+									THEN S.CNT
+								ELSE 0
+								END) AS B2C
+						,SUM(S.CNT) AS TOTAL
+					FROM (
+						SELECT D_RESPONSE.PRODID AS PRODID
+							,D_REQUEST.SITECODE AS SITECODE
+							,D_REQUEST.REQUEST_CNT AS CNT
+							,D_REQUEST.REGDATE AS REGDATE
+						FROM  BM_DELIVERY_REQUEST AS D_REQUEST 
+						INNER JOIN BM_DELIVERY_RESPONSE AS D_RESPONSE 
+						ON D_REQUEST.DR_IDX = D_RESPONSE.DR_IDX 
+						WHERE  D_RESPONSE.DELIVERY_NUM IS NOT NULL
+							AND D_REQUEST.SITECODE < '300000'
+							AND D_REQUEST.STATUS = '03'
+							]]>
+							<include refid="inventoryDateWhere"></include>
+						) S
+					GROUP BY S.PRODID
+						,S.SITECODE
+					) T
+				GROUP BY T.PRODID
+				) BMS
+			LEFT OUTER JOIN BM_PROD P ON BMS.PRODID = P.PRODID
+			) PP
+	</select>
+	
+	
+</mapper>
+

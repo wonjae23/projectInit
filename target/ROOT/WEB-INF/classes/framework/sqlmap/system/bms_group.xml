@@ -1,0 +1,120 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="bmsGroup">
+	
+	<!-- admin group list -->
+	<select id="selectBmsGroupList" resultType="java.util.HashMap">
+		SELECT 
+			AG_IDX,AG_NAME,AG_DESC,
+			(SELECT COUNT(AD_IDX) FROM BM_ADMIN WHERE AG_IDX=A.AG_IDX) AS AG_CNT
+		FROM BM_ADMINGROUP A		
+	</select>
+	
+	<!-- admin group insert -->
+	<insert id="insertBmsGroup" parameterType="java.util.HashMap">
+		INSERT INTO BM_ADMINGROUP
+		(AG_NAME,AG_DESC)
+		VALUES
+		(#{AG_NAME},#{AG_DESC})
+	</insert>
+	
+	<!-- admin group insert -->
+	<insert id="insertBmsGroupRetkey" parameterType="java.util.HashMap">
+		<selectKey resultType="int" keyProperty="MaxID">
+			<![CDATA[
+				INSERT INTO BM_ADMINGROUP (AG_NAME,AG_DESC)
+				VALUES (#{AG_NAME},#{AG_DESC}) 
+				SELECT IDENT_CURRENT('BM_ADMINGROUP') as MaxID
+			]]>
+		</selectKey>
+	</insert>	
+	
+	<!-- admin group info select -->
+	<select id="selectBmsGroupInfo" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+		SELECT 
+			AG_IDX,AG_NAME,AG_DESC
+		FROM BM_ADMINGROUP
+		WHERE AG_IDX=#{AG_IDX}
+	</select>
+	
+	<!-- 관리자 메뉴별 권한 등록 리스트 조회 -->
+	<select id="selectBmsGroupMenuList" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+		<![CDATA[
+			WITH AMENU(AM_IDX,AM_TOPIDX,AM_NAME,AM_URL,AM_ORDER,AM_USEYN,AM_LEVEL,SORT_NO)
+				AS 
+				(
+					SELECT 
+						AM_IDX,AM_TOPIDX,AM_NAME,AM_URL,AM_ORDER,AM_USEYN,AM_LEVEL
+						,REPLICATE('0', 3 - LEN(CONVERT(VARCHAR(MAX), AM_ORDER))) + CONVERT(VARCHAR(MAX), AM_ORDER) AS SORT_NO
+					FROM BM_ADMINMENU WITH(NOLOCK)
+					WHERE AM_USEYN='Y'	
+					AND AM_TOPIDX=0
+					UNION ALL
+					SELECT 
+						A.AM_IDX,A.AM_TOPIDX,A.AM_NAME,A.AM_URL,A.AM_ORDER,A.AM_USEYN,A.AM_LEVEL	
+						, CONVERT(VARCHAR(MAX),B.SORT_NO) + REPLICATE('0', 3 - LEN(CONVERT(VARCHAR(MAX), A.AM_ORDER))) + CONVERT(VARCHAR(MAX), A.AM_ORDER) AS SORT_NO		
+					FROM BM_ADMINMENU AS A WITH(NOLOCK)
+					INNER JOIN AMENU B 
+					ON A.AM_TOPIDX=B.AM_IDX
+					WHERE A.AM_USEYN='Y'
+				)
+				SELECT		
+					ROW_NUMBER() OVER(ORDER BY SORT_NO ASC) AS RNUM,
+					*			
+				FROM AMENU AS AM
+				LEFT OUTER JOIN
+				(
+					SELECT 
+						AG_IDX,AM_IDX,AA_ASIGN,AA_ENTR,AA_EDIT,AA_DEL,AA_EXCL,AA_REGUSER,AA_REGDT
+					FROM BM_ADMINGRPAUTH WITH(NOLOCK)
+					WHERE AG_IDX=#{AG_IDX}
+				) AS AA
+				ON AM.AM_IDX=AA.AM_IDX
+		]]>		
+	</select>
+	
+	<!-- admin group update -->
+	<update id="updatBmsGroup" parameterType="java.util.HashMap">
+		UPDATE BM_ADMINGROUP SET
+			AG_NAME=#{AG_NAME},
+			AG_DESC=#{AG_DESC}
+		WHERE AG_IDX=#{AG_IDX} 
+	</update>
+	
+	<!-- delete admin group -->
+	<delete id="deleteBmsGroup" parameterType="java.util.HashMap">
+		DELETE FROM BM_ADMINGROUP
+		WHERE AG_IDX=#{AG_IDX}
+	</delete>
+	
+	
+	<!-- delete admin group auth -->
+	<delete id="deleteBmsGroupAuth" parameterType="java.util.HashMap">
+		DELETE FROM BM_ADMINGRPAUTH
+		WHERE AG_IDX=#{AG_IDX}
+	</delete>
+	
+	<!-- insert admin group auth -->
+	<insert id="insertBmsGroupAuth" parameterType="java.util.HashMap">
+		INSERT INTO BM_ADMINGRPAUTH
+		(AG_IDX,AM_IDX,AA_ASIGN,AA_ENTR,AA_EDIT,AA_DEL,AA_EXCL,AA_REGUSER,AA_REGDT)
+		VALUES
+		(#{AG_IDX},#{AM_IDX},#{AA_ASIGN},#{AA_ENTR},#{AA_EDIT},#{AA_DEL},#{AA_EXCL},#{AA_REGUSER},GETDATE())         
+	</insert>
+	
+	<!-- admin group member list -->
+	<select id="selectBmsGroupMemberList" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+		SELECT 
+			AD_IDX,AG_IDX,AD_REGUSER,AD_REGDT,MB_IDX,AD_NAME,AD_EMAIL,AD_TEL 
+		FROM BM_ADMIN 
+		WHERE AG_IDX=#{AG_IDX}		
+	</select>
+	
+	<insert id="insertBmsGroupAuthCopy" parameterType="java.util.HashMap">
+		INSERT INTO BM_ADMINGRPAUTH   
+			SELECT #{NEW_AG_IDX}, A.AM_IDX, A.AA_ASIGN, A.AA_ENTR, A.AA_EDIT, A.AA_DEL, A.AA_EXCL, #{AA_REGUSER}, GETDATE()
+		FROM BM_ADMINGRPAUTH A WHERE A.AG_IDX = #{AG_IDX}
+	</insert>
+		
+</mapper>

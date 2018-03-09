@@ -1,0 +1,531 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="bmsDelivery">
+	<sql id="deliveryWhere">
+		AND DATEDIFF(D,#{sdate1},RQ.REGDATE)>=0 AND DATEDIFF(D,RQ.REGDATE,#{edate1})>=0
+		<if test="sitedivid !=null and sitedivid != '' ">
+			AND Left(RQ.SITECODE,1)= #{sitedivid}
+		</if>	
+		<if test="searchType != '' and searchKeyword !='' ">
+			<choose>				
+				<when test="searchType =='adminname' ">		
+					AND U.ADMINNAME LIKE '%'+#{searchKeyword}+'%'
+				</when>
+				<when test="searchType =='receiver' ">		
+					AND RQ.RECEIVER LIKE '%'+#{searchKeyword}+'%'
+				</when>
+				<when test="searchType =='productid' ">		
+					AND RQ.PRODUCTID LIKE '%'+#{searchKeyword}+'%'
+				</when>
+				<when test="searchType =='prodid' ">		
+					AND RQ.PRODID LIKE '%'+#{searchKeyword}+'%'
+				</when>
+				<when test="searchType =='hp' ">		
+					AND RQ.HP LIKE '%'+#{searchKeyword}+'%'
+				</when>
+			</choose>
+		</if>
+		<if test="searchType2 != '' and searchKeyword2 !='' ">
+			<choose>				
+				<when test="searchType2 =='adminname' ">		
+					AND U.ADMINNAME LIKE '%'+#{searchKeyword2}+'%'
+				</when>
+				<when test="searchType2 =='receiver' ">		
+					AND RQ.RECEIVER LIKE '%'+#{searchKeyword2}+'%'
+				</when>
+				<when test="searchType2 =='productid' ">		
+					AND RQ.PRODUCTID LIKE '%'+#{searchKeyword2}+'%'
+				</when>
+				<when test="searchType2 =='prodid' ">		
+					AND RQ.PRODID LIKE '%'+#{searchKeyword2}+'%'
+				</when>
+				<when test="searchType2 =='hp' ">		
+					AND RQ.HP LIKE '%'+#{searchKeyword2}+'%'
+				</when>
+			</choose>
+		</if>
+	</sql>
+			
+	<!-- Delivery List count-->
+	<select id="selectDeliveryListCount" parameterType="java.util.HashMap" resultType="int">
+		<![CDATA[
+		SELECT  COUNT(*)  
+		FROM (SELECT * FROM BM_DELIVERY_REQUEST WHERE status = #{status} ) RQ
+		INNER JOIN BM_DELIVERY_RESPONSE AS RP ON RQ.DR_IDX = RP.DR_IDX
+		INNER JOIN BM_PROD PR ON RQ.PRODID=PR.PRODID
+		LEFT OUTER JOIN (
+				SELECT O.OUTPUTCODE
+					,ISNULL(M.ADMINNAME, 'LMS') ADMINNAME
+				FROM BM_OUTPUT O
+				LEFT OUTER JOIN (
+					SELECT USERID ADMINID
+						,MAX(TEAMNAME) TEAMNAME
+						,NAME ADMINNAME
+					FROM GW_SVR.GROUPWARE.DBO.MEMBER_VIEW
+					GROUP BY USERID
+						,NAME
+					) M ON O.USERID = M.ADMINID
+				) U ON RQ.ORDERCODE = U.OUTPUTCODE
+			
+		]]>
+		<include refid="deliveryWhere"></include>
+	</select>
+	
+	<!-- Delivery List -->
+	<select id="selectDeliveryList" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+		
+		SELECT 	*
+		FROM 
+		(
+			SELECT	ROW_NUMBER() OVER(ORDER BY RQ.ORDERCODE DESC) AS ROWNUM
+				,RQ.DR_IDX AS D_REQUEST_DR_IDX
+				,RQ.PRODID AS D_REQUEST_PRODID
+				,RQ.PRODUCTID AS D_REQUEST_PRODUCTID
+				,RQ.REQUEST_CNT AS D_REQUEST_REQUEST_CNT
+				,RQ.ORDERCODE AS D_REQUEST_ORDERCODE
+				,RQ.OP_CODE AS D_REQUEST_OP_CODE
+				,RQ.SITECODE AS D_REQUEST_SITECODE
+				,RQ.ZIPCODE AS D_REQUEST_ZIPCODE
+				,RQ.ADDR1 AS D_REQUEST_ADDR1
+				,RQ.ADDR2 AS D_REQUEST_ADDR2
+				,RQ.SHIPMESSAGE AS D_REQUEST_SHIPMESSAGE
+				,RQ.TEL AS D_REQUEST_TEL
+				,RQ.HP AS D_REQUEST_HP
+				,RQ.RECEIVER AS D_REQUEST_RECEIVER
+				,CONVERT(VARCHAR(10),RQ.REGDATE,120) AS D_REQUEST_REGDATE				
+				,RQ.STATUS AS D_REQUEST_STATUS
+				,RP.DRE_IDX AS D_RESPONSE_DRE_IDX
+				,RP.PRODID AS D_RESPONSE_PRODID
+				,RP.DELIVERY_NUM AS D_RESPONSE_DELIVERY_NUM
+				,RP.REGDATE AS D_RESPONSE_REGDATE
+				,RP.COMPLETEDATE AS D_RESPONSE_COMPLETEDATE
+				,RP.STATUS AS D_RESPONSE_STATUS
+				,PR.PRODNAME AS P1_PRODNAME
+				,PR.AMOUNT_REAL
+				,RP.PAUSEYN AS D_RESPONSE_PAUSEYN
+				,RP.DC_IDX AS D_RESPONSE_DC_IDX
+				,ISNULL(PR.PRODID, '') PRODID
+				,B.CNT
+				,ADMINNAME
+				,TEAMNAME
+				,MARKETER
+				,SITENAME
+			FROM (SELECT * FROM BM_DELIVERY_REQUEST WHERE status = #{status} ) RQ 
+			INNER JOIN BM_DELIVERY_RESPONSE RP ON RQ.DR_IDX =RP.DR_IDX
+			INNER JOIN BM_PROD PR ON RQ.PRODID=PR.PRODID
+			LEFT OUTER JOIN (
+				SELECT OUTPUTCODE
+					,INOUTTYPE
+					,USERID
+					,CUSTOMERCODE
+					,PRODID
+					,SELLPRICE
+					,OUTCENTER
+					,SUM(CNT) CNT
+				FROM BM_INOUT
+				GROUP BY OUTPUTCODE
+					,INOUTTYPE
+					,USERID
+					,CUSTOMERCODE
+					,PRODID
+					,SELLPRICE
+					,OUTCENTER
+				) B ON RQ.ORDERCODE = B.OUTPUTCODE
+				AND RQ.PRODID = B.PRODID
+			LEFT OUTER JOIN (
+				SELECT O.OUTPUTCODE
+					,ISNULL(M.ADMINNAME, 'LMS') ADMINNAME
+					,TEAMNAME,MARKETER
+				FROM BM_OUTPUT O
+				LEFT OUTER JOIN (
+					SELECT USERID ADMINID
+						,MAX(TEAMNAME) TEAMNAME
+						,NAME ADMINNAME
+					FROM GW_SVR.GROUPWARE.DBO.MEMBER_VIEW
+					GROUP BY USERID
+						,NAME
+					) M ON O.USERID = M.ADMINID
+				) U ON RQ.ORDERCODE = U.OUTPUTCODE
+			LEFT OUTER JOIN BM_SITECODE ST ON RQ.SITECODE=ST.SITECODE
+			
+						
+			<include refid="deliveryWhere"></include>
+			) AS TT
+			 WHERE TT.ROWNUM BETWEEN #{beginNum} AND #{endNum}
+ 			
+	</select>
+	
+	
+	<select id="selectDeliveryListtest" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+			SELECT
+				TOP 5000
+				RQ.DR_IDX AS D_REQUEST_DR_IDX
+				,RQ.PRODID AS D_REQUEST_PRODID
+				,RQ.PRODUCTID AS D_REQUEST_PRODUCTID
+				,RQ.REQUEST_CNT AS D_REQUEST_REQUEST_CNT
+				,RQ.ORDERCODE AS D_REQUEST_ORDERCODE
+				,RQ.OP_CODE AS D_REQUEST_OP_CODE
+				,RQ.SITECODE AS D_REQUEST_SITECODE
+				,RQ.ZIPCODE AS D_REQUEST_ZIPCODE
+				,RQ.ADDR1 AS D_REQUEST_ADDR1
+				,RQ.ADDR2 AS D_REQUEST_ADDR2
+				,RQ.SHIPMESSAGE AS D_REQUEST_SHIPMESSAGE
+				,RQ.TEL AS D_REQUEST_TEL
+				,RQ.HP AS D_REQUEST_HP
+				,RQ.RECEIVER AS D_REQUEST_RECEIVER
+				,CONVERT(VARCHAR(10),RQ.REGDATE,120) AS D_REQUEST_REGDATE				
+				,RQ.STATUS AS D_REQUEST_STATUS
+				,RP.DRE_IDX AS D_RESPONSE_DRE_IDX
+				,RP.PRODID AS D_RESPONSE_PRODID
+				,RP.DELIVERY_NUM AS D_RESPONSE_DELIVERY_NUM
+				,RP.REGDATE AS D_RESPONSE_REGDATE
+				,RP.COMPLETEDATE AS D_RESPONSE_COMPLETEDATE
+				,RP.STATUS AS D_RESPONSE_STATUS
+				,PR.PRODNAME AS P1_PRODNAME
+				,PR.AMOUNT_REAL
+				,RP.PAUSEYN AS D_RESPONSE_PAUSEYN
+				,RP.DC_IDX AS D_RESPONSE_DC_IDX
+				,ISNULL(PR.PRODID, '') PRODID
+				,ADMINNAME
+				,B.CNT
+				,TEAMNAME
+				,MARKETER
+				,SITENAME
+			FROM BM_DELIVERY_REQUEST RQ 
+			INNER JOIN BM_DELIVERY_RESPONSE RP ON RQ.DR_IDX =RP.DR_IDX
+			LEFT OUTER JOIN BM_PROD PR ON RQ.PRODID=PR.PRODID
+			LEFT OUTER JOIN (
+				SELECT OUTPUTCODE
+					,INOUTTYPE
+					,USERID
+					,CUSTOMERCODE
+					,PRODID
+					,SELLPRICE
+					,OUTCENTER
+					,SUM(CNT) CNT
+				FROM BM_INOUT
+				GROUP BY OUTPUTCODE
+					,INOUTTYPE
+					,USERID
+					,CUSTOMERCODE
+					,PRODID
+					,SELLPRICE
+					,OUTCENTER
+				) B ON RQ.ORDERCODE = B.OUTPUTCODE
+				AND RQ.PRODID = B.PRODID
+			LEFT OUTER JOIN (
+				SELECT O.OUTPUTCODE
+					,ISNULL(M.ADMINNAME, 'LMS') ADMINNAME
+					,TEAMNAME,MARKETER
+				FROM BM_OUTPUT O
+				LEFT OUTER JOIN (
+					SELECT USERID ADMINID
+						,MAX(TEAMNAME) TEAMNAME
+						,NAME ADMINNAME
+					FROM GW_SVR.GROUPWARE.DBO.MEMBER_VIEW
+					GROUP BY USERID
+						,NAME
+					) M ON O.USERID = M.ADMINID
+				) U ON RQ.ORDERCODE = U.OUTPUTCODE
+			LEFT OUTER JOIN BM_SITECODE ST ON RQ.SITECODE=ST.SITECODE
+			WHERE RQ.status = #{status}						
+			<include refid="deliveryWhere"></include>
+			ORDER BY RQ.ORDERCODE DESC, RP.REGDATE DESC, RP.PRODID
+			
+ 			
+	</select>
+	
+	
+
+	<select id="selectOrdercode" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+		SELECT   ORDERCODE
+				,DELIVERY_NUM
+				,MAX(B.REGDATE)
+				,COUNT(*) CNT
+		FROM BM_DELIVERY_REQUEST A
+		INNER JOIN BM_DELIVERY_RESPONSE B ON A.DR_IDX = B.DR_IDX
+		WHERE DRE_IDX IN (
+				#{D_RESPONSE_dre_idx}
+				)
+		GROUP BY ORDERCODE, DELIVERY_NUM
+		ORDER BY ORDERCODE DESC, MAX(B.REGDATE)
+	</select>
+	
+	<select id="selectOrderInfoList" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+		WITH ORDERINFO(ORDERCODE, INFO,ZIPCODE,ADDR1,ADDR2,SHIPMESSAGE,TEL,HP,RECEIVER,DELIVERY_NUM)
+		AS(
+			SELECT 
+				A.ORDERCODE
+				,ISNULL(ISBN,' ') +'||' +A.PRODID+'||'+PRODNAME+'||'+cast(request_cnt as varchar(5)) 
+				,A.ZIPCODE
+				,A.ADDR1
+				,A.ADDR2	
+				,A.SHIPMESSAGE
+				,A.TEL
+				,A.HP
+				,A.RECEIVER
+				,B.DELIVERY_NUM
+			  FROM 
+			  	BM_DELIVERY_REQUEST A 
+			  	INNER JOIN BM_DELIVERY_RESPONSE B ON A.DR_IDX = B.DR_IDX
+				INNER JOIN BM_PROD C ON B.PRODID=C.PRODID
+			  WHERE 
+				B.DRE_IDX IN 
+				 <foreach item="item"  collection="D_RESPONSE_dre_idx" index="index" open="(" separator="," close=")">
+	           #{item}
+	     		</foreach >
+			)
+
+		SELECT ORDERCODE, INFO,ZIPCODE,ADDR1,ADDR2,SHIPMESSAGE,TEL,HP,RECEIVER ,DELIVERY_NUM
+		FROM (
+				SELECT  A.ordercode , STUFF((
+												SELECT '@ ' + A1.INFO
+		  										FROM ORDERINFO A1
+		  										WHERE (A1.ORDERCODE = A.ORDERCODE)
+		  										FOR XML PATH ('')),1,1,'') INFO
+		  				,ZIPCODE,ADDR1,ADDR2,SHIPMESSAGE,TEL,HP,RECEIVER,DELIVERY_NUM
+		 FROM ORDERINFO A
+			GROUP BY A.ORDERCODE,ZIPCODE,ADDR1,ADDR2,SHIPMESSAGE,TEL,HP,RECEIVER,DELIVERY_NUM
+		) KK
+		 
+		
+		
+		
+	</select>
+	
+	<select id="selectDeliveryBatchExcel" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+		SELECT DISTINCT 0 AS dr_idx
+			,D_REQUEST.PRODID
+			,D_REQUEST.ProductID
+			,D_REQUEST.request_cnt
+			,D_REQUEST.OrderCode
+			,D_REQUEST.op_code
+			,D_REQUEST.SiteCode
+			,D_REQUEST.zipcode
+			,D_REQUEST.addr1+D_REQUEST.addr2 addr
+			,D_REQUEST.addr1
+			,D_REQUEST.addr2
+			,D_REQUEST.shipmessage
+			,D_REQUEST.tel
+			,D_REQUEST.hp
+			,D_REQUEST.receiver + CASE D_REQUEST.SiteCode WHEN '300000' THEN '(B)' ELSE  ''END AS receiver
+			,CONVERT(VARCHAR(10), D_REQUEST.regdate, 120) REGDATE
+			,D_REQUEST.STATUS
+			,0 AS dre_idx
+			,D_RESPONSE.PRODID
+			,D_RESPONSE.delivery_num
+			,CONVERT(VARCHAR(10), D_RESPONSE.regdate, 120) REGDATE
+			,CONVERT(VARCHAR(10), D_RESPONSE.completedate, 120) COMPLETEDATE
+			,D_RESPONSE.STATUS
+			,P1.PRODNAME
+			,P2.PRODNAME
+			,ISNULL(P2.AMOUNT_REAL, 0) AS AMOUNT_REAL
+			,D_REQUEST.OrderCode +'_'+ D_REQUEST.SiteCode +'_'+ CASE TeamName WHEN '1' THEN '' else '' END AS code 
+			,ETC_DREIDX
+			,D_RESPONSE.DRE_IDX
+			FROM BM_DELIVERY_REQUEST AS D_REQUEST
+			INNER JOIN BM_DELIVERY_RESPONSE AS D_RESPONSE ON D_REQUEST.dr_idx = D_RESPONSE.dr_idx
+			LEFT OUTER JOIN ( 
+				SELECT  DISTINCT ORDERCODE,(  
+	             SELECT  CAST(DR_IDX AS VARCHAR(10)) + ', '   
+	             FROM    BM_DELIVERY_REQUEST  
+	             WHERE   ORDERCode    = A.ORDERCode  
+	             FOR XML PATH('')  
+	             ) ETC_DREIDX 
+			FROM BM_DELIVERY_REQUEST A  
+		) X ON D_REQUEST.ORDERCODE = X.ORDERCODE
+		INNER JOIN BM_PROD AS P1 ON D_REQUEST.PRODID = P1.PRODID
+		INNER JOIN BM_PROD AS P2 ON D_RESPONSE.PRODID = P2.PRODID
+		AND D_RESPONSE.dre_idx IN
+		<foreach item="item"  collection="D_RESPONSE_dre_idx" index="index" open="(" separator="," close=")">
+	           #{item}
+	     </foreach >
+
+		LEFT OUTER JOIN (
+			SELECT O.OUTPUTCODE
+				,ISNULL(M.TEAMNAME, 'LMS') TEAMNAME
+			FROM BM_OUTPUT O
+			LEFT OUTER JOIN (
+				SELECT USERID ADMINID
+						,MAX(TEAMNAME) TEAMNAME
+						,NAME ADMINNAME
+					FROM GW_SVR.GROUPWARE.DBO.MEMBER_VIEW
+				GROUP BY USERID, NAME
+				) M ON O.USERID = M.ADMINID
+			) U ON D_REQUEST.ORDERCODE = U.OUTPUTCODE
+		ORDER BY D_REQUEST.ORDERCODE DESC ,D_RESPONSE.PRODID	
+	</select>
+	
+	
+	
+	<select id="selectOutputProdTeamCnt" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+		SELECT 
+			TEAMNAME, SUM(CNT) TOTALCNT  
+		FROM (
+				SELECT 
+					USERID, CNT  
+				FROM 
+					BM_OUTPUT A
+				LEFT OUTER JOIN (SELECT OUTPUTCODE, SUM(CNT) CNT FROM BM_OUTPUTPROD GROUP BY OUTPUTCODE  )B ON A.OUTPUTCODE=B.OUTPUTCODE
+				WHERE 
+					A.OUTPUTCODE IN (
+						SELECT 
+							B.ORDERCODE
+						FROM BM_DELIVERY_RESPONSE A 
+						LEFT OUTER JOIN BM_DELIVERY_REQUEST B ON A.DR_IDX=B.DR_IDX
+					    WHERE B.SITECODE='300000' AND A.DRE_IDX IN(#{D_RESPONSE_dre_idxs_request})
+					)
+			)
+		TT 
+		LEFT OUTER JOIN GW_SVR.GROUPWARE.DBO.MEMBER_VIEW M ON TT.USERID= M.USERID 
+		GROUP BY TEAMNAME	
+	</select>
+		
+	
+	<update id="updateDoubleAddress" parameterType="java.util.HashMap">
+	UPDATE BM_DELIVERY_REQUEST 
+	SET BM_DELIVERY_REQUEST.RECEIVER = BM_DELIVERY_REQUEST.RECEIVER+TT.SCNT
+	FROM (
+			SELECT CASE WHEN SCNT='1' THEN '*' 
+				WHEN SCNT='2' THEN '**' 
+				WHEN SCNT='3' THEN '***' 
+				WHEN SCNT='4' THEN '****' 
+				WHEN SCNT='5' THEN '*****' 
+				END SCNT ,ORDERCODE 
+			FROM (
+					SELECT Row_Number() OVER (Partition BY a.ADDR2, a.RECEIVER ORDER BY a.ORDERCODE DESC) SCNT,a.* 
+					FROM (
+							SELECT ORDERCODE, ADDR2, RECEIVER 
+							 FROM BM_DELIVERY_REQUEST A
+							 INNER JOIN BM_DELIVERY_RESPONSE B 
+							 ON A.DR_IDX=B.DR_IDX
+							 WHERE DRE_IDX IN								 
+							 <foreach item="item"  collection="D_RESPONSE_dre_idx" index="index" open="(" separator="," close=")">
+	           					#{item}
+	           				</foreach >
+							 GROUP BY ADDR2, RECEIVER, ORDERCODE
+							) A 
+					INNER JOIN (
+								SELECT ORDERCODE, ADDR2, RECEIVER  
+								FROM BM_DELIVERY_REQUEST A
+								INNER JOIN BM_DELIVERY_RESPONSE B 
+								ON A.DR_IDX=B.DR_IDX
+							 	WHERE DRE_IDX IN			
+								<foreach item="item"  collection="D_RESPONSE_dre_idx" index="index" open="(" separator="," close=")">
+	           					#{item}
+	           					</foreach >
+								GROUP BY ADDR2, RECEIVER , ORDERCODE 
+								) B
+		<![CDATA[
+					ON A.ADDR2 = B.ADDR2 AND A.RECEIVER=B.RECEIVER AND A.ORDERCODE<>B.ORDERCODE
+					]]>
+		  )TT)TT WHERE BM_DELIVERY_REQUEST.ORDERCODE=TT.ORDERCODE;
+		  	
+		  	UPDATE BM_DELIVERY_REQUEST SET EXCELYN='Y' FROM BM_DELIVERY_RESPONSE 
+		  	WHERE BM_DELIVERY_REQUEST.DR_IDX=BM_DELIVERY_RESPONSE.DR_IDX AND 
+		  	BM_DELIVERY_RESPONSE.DRE_IDX IN
+		  	<foreach item="item"  collection="D_RESPONSE_dre_idx" index="index" open="(" separator="," close=")">
+	        	#{item}
+	        </foreach >
+	           				
+	</update>
+	
+	<update id="updateDeliveryNum" parameterType="java.util.HashMap">
+		UPDATE BM_DELIVERY_RESPONSE SET DELIVERY_NUM = #{DELIVERYNUM} ,COMPLETEDATE=GETDATE(),STATUS='03',DC_IDX=#{DELIVERYCOMPANY},DK_IDX=1
+		<![CDATA[
+		WHERE STATUS<>'03' AND DRE_IDX IN
+		]]> 
+		<foreach item="item"  collection="D_RESPONSE_dre_idx" index="index" open="(" separator="," close=")">
+	    #{item}
+	    </foreach >
+	</update>
+	
+	<update id="updateRequestStatus" parameterType="java.util.HashMap">
+	Update BM_DELIVERY_REQUEST 
+	SET Status = (
+	<![CDATA[
+					SELECT CASE WHEN RR>0 AND CC>0 THEN '02' WHEN RR>0 AND CC<=0 THEN '01' WHEN  RR<=0 AND CC>0 THEN  '03' END 
+					FROM(
+							SELECT SUM(CASE WHEN A.STATUS='01' THEN 1 ELSE 0 END) RR , SUM(CASE WHEN A.STATUS='03' THEN 1 ELSE 0 END) CC
+							FROM BM_DELIVERY_RESPONSE A INNER JOIN BM_DELIVERY_REQUEST B ON A.DR_IDX=B.DR_IDX
+							WHERE B.ORDERCODE=#{ORDERCODE}
+							GROUP BY A.STATUS
+						)TT 
+				), Parcel=#{DELIVERYCOMPANY}
+	]]>
+	 WHERE ORDERCODE = #{ORDERCODE}
+	</update>
+	
+	<update id="updateProdAmount" parameterType="java.util.HashMap">
+		UPDATE BM_PROD SET BM_PROD.AMOUNT_REAL = BM_PROD.AMOUNT_REAL-RQ.REQUEST_CNT
+				,BM_PROD.AMOUNT_VIRTUAL=bm_prod.AMOUNT_VIRTUAL-rq.request_cnt
+		FROM (
+				SELECT b.PRODID,a.REQUEST_CNT 
+				FROM BM_DELIVERY_REQUEST A INNER JOIN BM_DELIVERY_RESPONSE B 
+				ON A.DR_IDX = B.DR_IDX
+				<![CDATA[
+				WHERE A.STATUS<>'03' AND DRE_IDX IN
+				]]>
+				<foreach item="item"  collection="D_RESPONSE_dre_idx" index="index" open="(" separator="," close=")">
+				    #{item}
+				</foreach >
+	    ) RQ WHERE BM_PROD.PRODID = RQ.PRODID
+	</update>
+	
+	<update id="updateOutPutInsertInOut" parameterType="java.util.HashMap" >
+  
+		UPDATE BM_OUTPUT SET DATA_STATUS='155003' ,ExpectedDate = GETDATE() 
+		<![CDATA[
+		WHERE DATA_STATUS<>'155003' AND OUTPUTCODE = #{ORDERCODE};
+		]]>
+		UPDATE BM_OUTPUTPROD SET DATA_STATUS='155003' 
+		<![CDATA[
+		WHERE DATA_STATUS<>'155003' AND OUTPUTCODE =#{ORDERCODE} AND PRODID IN (
+		]]>
+														SELECT b.PRODID
+														FROM BM_DELIVERY_REQUEST A 
+														INNER JOIN BM_DELIVERY_RESPONSE B
+														ON A.DR_IDX = B.DR_IDX
+														WHERE DRE_IDX IN
+				<foreach item="item"  collection="D_RESPONSE_dre_idx" index="index" open="(" separator="," close=")">
+				    #{item}
+				</foreach >
+		)
+		
+		IF @@ROWCOUNT>0 
+		
+		INSERT INTO BM_INOUT(SITECODE, OUTPUTCODE, INOUTTYPE, USERID , PRODID, CNT, SELLPRICE, OUTCENTER)
+		SELECT A.SITECODE, A.ORDERCODE, ISNULL(D.OUTPUTTYPE,'156001') OUTPUTTYPE, ISNULL(D.USERID,'LMS') USERID ,	B.PRODID, 
+				A.REQUEST_CNT, C.BUYPRICE, isNull(D.OUTCENTER,'154001') OUTCENTER 
+		FROM BM_DELIVERY_REQUEST A 
+		INNER JOIN BM_DELIVERY_RESPONSE B ON A.DR_IDX=B.DR_IDX
+		LEFT OUTER JOIN BM_PROD C ON B.PRODID = C.PRODID
+		LEFT OUTER JOIN BM_OUTPUT D ON A.ORDERCODE = D.OUTPUTCODE
+		WHERE B.DRE_IDX IN 
+		<foreach item="item"  collection="D_RESPONSE_dre_idx" index="index" open="(" separator="," close=")">
+			#{item}
+		</foreach >
+		
+	</update>	
+	
+	<select id="selectOutputProdTeamCntBatchExcel" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+		SELECT TEAMNAME, SUM(CNT) TOTALCNT  
+		FROM (
+			SELECT USERID, CNT  FROM BM_OUTPUT A
+			LEFT OUTER JOIN (SELECT OUTPUTCODE, SUM(CNT) CNT FROM BM_OUTPUTPROD GROUP BY OUTPUTCODE )B ON A.OUTPUTCODE=B.OUTPUTCODE
+			WHERE A.OUTPUTCODE IN (
+					SELECT B.ORDERCODE 
+					FROM BM_DELIVERY_RESPONSE A 
+					LEFT OUTER JOIN BM_DELIVERY_REQUEST B
+					ON A.DR_IDX=B.DR_IDX 
+					WHERE B.SITECODE='300000' AND A.DRE_IDX IN
+					<foreach item="item"  collection="D_RESPONSE_dre_idx" index="index" open="(" separator="," close=")">
+						#{item}
+					</foreach >
+				)
+			)
+		TT 
+		LEFT OUTER JOIN GW_SVR.GROUPWARE.DBO.MEMBER_VIEW M ON TT.USERID= M.USERID GROUP BY TEAMNAME
+	</select>
+</mapper>

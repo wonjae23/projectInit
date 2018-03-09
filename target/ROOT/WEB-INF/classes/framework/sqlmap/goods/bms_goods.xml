@@ -1,0 +1,700 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="bmsGoods">
+	
+	<sql id="goodsWhere">
+	 AND CATEGORYID IN (SELECT CATEGORYID FROM BM_BOOK_CATEGORY_AUTH WHERE ADMINIDX =#{ADMINIDX} AND USED='Y') 
+		<if test="searchSTYPE != null and searchSTYPE != '' ">
+			<choose>
+				<when test="searchSTYPE == 'PRODNAME' ">
+					AND PRODNAME LIKE '%'+#{searchKEYWORD}+'%'
+				</when>
+				<when test="searchSTYPE == 'P.PRODID' ">
+					AND P.PRODID = #{searchKEYWORD}
+				</when>
+				<when test="searchSTYPE == 'KEYWORD' ">
+					AND KEYWORD LIKE '%'+#{searchKEYWORD}+'%'
+				</when>
+				<when test="searchSTYPE == 'MAKECOM' ">
+					AND MAKECOM LIKE '%'+#{searchKEYWORD}+'%'
+				</when>
+				<when test="searchSTYPE == 'Title' ">
+					AND Title LIKE '%'+#{searchKEYWORD}+'%'
+				</when>
+				<when test="searchSTYPE == 'ISBN' ">
+					AND ISBN LIKE '%'+#{searchKEYWORD}+'%'
+				</when>
+				<when test="searchSTYPE == 'BM.AdminName' ">
+					AND BM.AdminName LIKE '%'+#{searchKEYWORD}+'%'
+				</when>
+			</choose>
+		</if>
+		
+		<if test="copyyear != null and copyyear != '' ">
+			AND copyyear = #{copyyear}
+		</if>
+		
+		<if test="gstatus != null and gstatus != '' ">
+			<choose>
+				<when test="gstatus == 0 ">
+					AND SellYN= '1' And Safty='Y' And Amount_Real >0
+				</when>
+				<when test="gstatus == 1 ">
+					AND SellYN ='2'
+				</when>
+				<when test="gstatus == 2 ">
+					AND SellYN= '1' And Safty='N'
+				</when>
+				<when test="gstatus == 3 ">
+					AND Amount_Real=0
+				</when>
+			</choose>
+		</if>
+		
+		<if test="FA_FILENAME != null and FA_FILENAME != '' ">
+			, IMGFILE = #{FA_FILENAME}
+		</if>
+		
+		<if test="searchSTYPE != null and searchSTYPE != '' ">
+			<if test="S_Keyword != null and S_Keyword != '' ">
+				<choose>
+					<when test="searchSTYPE == 'b.adminname' ">
+						AND AdminName LIKE '%'+#{searchKEYWORD}+'%'
+					</when>
+					<when test="searchSTYPE == 'a.userid' ">
+						AND userid LIKE '%'+#{searchKEYWORD}+'%'
+					</when>
+					<when test="searchSTYPE == 'prodid' ">
+						AND prodid LIKE '%'+#{searchKEYWORD}+'%'
+					</when>
+				</choose>
+			</if>
+		</if>
+	</sql>
+	
+	<!-- totalgoods List count -->
+	<select id="selectTotalGoodsListCount" parameterType="java.util.HashMap" resultType="int">
+		<![CDATA[
+		SELECT COUNT(*)
+		FROM (
+			SELECT PRODID
+				,CATEGORYID
+				,ISBN
+				,PRODNAME
+				,KEYWORD
+				,BUYPRICE
+				,SELLPRICE
+				,STDPRICE
+				,SHIPPRICE
+				,DISPERCENT
+				,APPEPASSCASH
+				,IMGFILE
+				,UNITNAME
+				,SELLYN
+				,MAKECOM
+				,WRITER
+				,COPYYEAR
+				,SETYN
+				,AMOUNT_REAL
+				,AMOUNT_VIRTUAL
+				,AMOUNT_SAFTY
+				,CASE 
+					WHEN AMOUNT_REAL - AMOUNT_SAFTY <= 0
+						THEN 'N'
+					ELSE 'Y'
+				END SAFTY
+			FROM BM_PROD
+			) P
+		LEFT OUTER JOIN (
+			SELECT DISTINCT AM_IDX
+				,(
+					SELECT A.AM_NAME + ',' + ISNULL(B.AM_NAME, '') + ' '
+					FROM BM_BOOK_CATEGORY A
+					LEFT OUTER JOIN BM_BOOK_CATEGORY B ON A.AM_IDX = B.AM_TOPIDX
+					WHERE A.AM_IDX = C.AM_IDX
+					FOR XML PATH('')
+					) TITLE
+				,'Y' STATUS
+			FROM (
+				SELECT A.AM_IDX
+					,A.AM_NAME + ',' + ISNULL(B.AM_NAME, '') TITLE
+				FROM BM_BOOK_CATEGORY A
+				LEFT OUTER JOIN BM_BOOK_CATEGORY B ON A.AM_IDX = B.AM_TOPIDX
+				WHERE A.AM_USEYN = 'Y'
+				) C
+			) AS C ON P.CATEGORYID = C.AM_IDX
+		LEFT OUTER JOIN (
+			SELECT A.AM_IDX
+				,B.AM_NAME FIRSTTITLE
+				,A.AM_NAME SECONDTITLE
+				,C.AM_NAME ROOTTITLE
+			FROM BM_BOOK_CATEGORY A
+			LEFT OUTER JOIN BM_BOOK_CATEGORY B ON A.AM_TOPIDX = B.AM_IDX
+			LEFT OUTER JOIN BM_BOOK_CATEGORY C ON B.AM_TOPIDX = C.AM_IDX
+			) CCA ON P.CATEGORYID = CCA.AM_IDX
+		LEFT OUTER JOIN (
+			SELECT PRODID
+				,STUFF((
+						SELECT ', ' + A1.ADMINNAME
+						FROM (
+							SELECT ADMINNAME
+								,PRODID
+							FROM BM_BOOK_MANAGER A
+							LEFT OUTER JOIN (
+								SELECT USERID ADMINID, NAME ADMINNAME,TEAMNAME
+								FROM GW_SVR.GROUPWARE.DBO.MEMBER_VIEW
+								WHERE GPCODE = 'EPK'
+								) B ON A.USERID = B.ADMINID
+							) A1
+						WHERE (A1.PRODID = A.PRODID)
+						FOR XML PATH('')
+						), 1, 2, '') AS ADMINNAME
+			FROM (
+				SELECT ADMINNAME
+					,PRODID
+				FROM BM_BOOK_MANAGER A
+				LEFT OUTER JOIN (
+									SELECT USERID ADMINID, NAME ADMINNAME,TEAMNAME
+									FROM GW_SVR.GROUPWARE.DBO.MEMBER_VIEW
+									WHERE GPCODE = 'EPK'
+				
+				) B ON a.USERID = B.ADMINID
+			) a
+		GROUP BY PRODID
+	) BM ON P.PRODID = BM.PRODID
+	
+	WHERE  P.PRODID <> '' AND C.STATUS = 'Y'
+		]]>
+		<include refid="goodsWhere"></include>
+	</select>
+	
+	<!-- totalgoods List -->
+	<select id="selectTotalGoodsList" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+		<![CDATA[
+		SELECT * FROM
+		      	(
+		          SELECT			          	
+			            ROW_NUMBER() OVER(ORDER BY P.PRODID DESC) AS ROWNUM
+						,P.PRODID
+						,PRODNAME
+						,KEYWORD
+						,BUYPRICE
+						,SELLPRICE
+						,STDPRICE
+						,SHIPPRICE
+						,DISPERCENT
+						,APPEPASSCASH
+						,IMGFILE
+						,UNITNAME
+						,SELLYN
+						,MAKECOM
+						,WRITER
+						,COPYYEAR
+						,SETYN
+						,AMOUNT_REAL
+						,AMOUNT_VIRTUAL
+						,AMOUNT_SAFTY
+						,SAFTY
+						,FIRSTTITLE
+						,SECONDTITLE
+						,ROOTTITLE
+						,C.TITLE
+						,ISBN
+						,BM.ADMINNAME
+						,BF.FA_IDX
+						,BF.FA_EXT
+						,BM.USERID
+						,ISNULL(AMOUNT_REAL3, '0') AMOUNT_REAL3
+				FROM (
+					SELECT PRODID
+						,CATEGORYID
+						,ISBN
+						,PRODNAME
+						,KEYWORD
+						,BUYPRICE
+						,SELLPRICE
+						,STDPRICE
+						,SHIPPRICE
+						,DISPERCENT
+						,APPEPASSCASH
+						,IMGFILE
+						,UNITNAME
+						,SELLYN
+						,MAKECOM
+						,WRITER
+						,COPYYEAR
+						,SETYN
+						,AMOUNT_REAL
+						,AMOUNT_REAL3
+						,AMOUNT_VIRTUAL
+						,AMOUNT_SAFTY
+						,CASE 
+							WHEN AMOUNT_REAL - AMOUNT_SAFTY <= 0
+								THEN 'N'
+							ELSE 'Y'
+						END SAFTY
+					FROM BM_PROD
+					) P
+				LEFT OUTER JOIN (
+					SELECT DISTINCT AM_IDX
+						,(
+							SELECT A.AM_NAME + ',' + ISNULL(B.AM_NAME, '') + ' '
+							FROM BM_BOOK_CATEGORY A
+							LEFT OUTER JOIN BM_BOOK_CATEGORY B ON A.AM_IDX = B.AM_TOPIDX
+							WHERE A.AM_IDX = C.AM_IDX
+							FOR XML PATH('')
+							) TITLE
+						,'Y' STATUS
+					FROM (
+						SELECT A.AM_IDX
+							,A.AM_NAME + ',' + ISNULL(B.AM_NAME, '') TITLE
+						FROM BM_BOOK_CATEGORY A
+						LEFT OUTER JOIN BM_BOOK_CATEGORY B ON A.AM_IDX = B.AM_TOPIDX
+						WHERE A.AM_USEYN = 'Y'
+						) C
+					) AS C ON P.CATEGORYID = C.AM_IDX
+				LEFT OUTER JOIN (
+					SELECT A.AM_IDX
+						,B.AM_NAME FIRSTTITLE
+						,A.AM_NAME SECONDTITLE
+						,C.AM_NAME ROOTTITLE
+					FROM BM_BOOK_CATEGORY A
+					LEFT OUTER JOIN BM_BOOK_CATEGORY B ON A.AM_TOPIDX = B.AM_IDX
+					LEFT OUTER JOIN BM_BOOK_CATEGORY C ON B.AM_TOPIDX = C.AM_IDX
+					) CCA ON P.CATEGORYID = CCA.AM_IDX
+				LEFT OUTER JOIN (
+					SELECT PRODID
+						,STUFF((
+								SELECT ', ' + A1.ADMINNAME
+								FROM (
+									SELECT ADMINNAME
+										,PRODID
+									FROM BM_BOOK_MANAGER A
+									LEFT OUTER JOIN (
+														SELECT USERID ADMINID, NAME ADMINNAME,TEAMNAME
+														FROM GW_SVR.GROUPWARE.DBO.MEMBER_VIEW
+														WHERE GPCODE = 'EPK'
+										
+									) B ON A.USERID = B.ADMINID
+								) A1
+								WHERE (a1.PRODID = a.PRODID)
+								FOR XML PATH('')
+								), 1, 2, '') AS ADMINNAME
+						,STUFF((
+								SELECT ', ' + A1.USERID
+								FROM BM_BOOK_MANAGER A1
+								WHERE (A1.PRODID = A.PRODID)
+								FOR XML PATH('')
+								), 1, 1, '') USERID
+					FROM (
+						SELECT ADMINNAME
+							,PRODID
+						FROM BM_BOOK_MANAGER A
+						LEFT OUTER JOIN (
+											SELECT USERID ADMINID, NAME ADMINNAME,TEAMNAME
+											FROM GW_SVR.GROUPWARE.DBO.MEMBER_VIEW
+											WHERE GPCODE = 'EPK'
+							
+						) B ON A.USERID = B.ADMINID
+					) A
+					GROUP BY PRODID
+					) BM ON P.PRODID = BM.PRODID
+				LEFT OUTER JOIN BM_FILEATTACH BF ON  P.PRODID= BF.FD_IDX
+				WHERE P.PRODID <> ''
+					AND C.STATUS = 'Y'
+					]]>
+					<include refid="goodsWhere"></include>
+   				) AS TT
+                WHERE TT.ROWNUM BETWEEN #{beginNum} AND #{endNum}
+	</select>
+	
+	<!-- totalgoods List 엑셀 -->
+	<select id="selectTotalGoodsListExcel" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+		<![CDATA[
+		SELECT P.PRODID
+			,PRODNAME
+			,KEYWORD
+			,BUYPRICE
+			,SELLPRICE
+			,STDPRICE
+			,SHIPPRICE
+			,DISPERCENT
+			,APPEPASSCASH
+			,IMGFILE
+			,UNITNAME
+			,CASE WHEN SELLYN='2' THEN '미판매' 
+			  WHEN SELLYN='1' THEN
+				CASE WHEN AMOUNT_SAFTY >= AMOUNT_REAL THEN '입고요망'
+				ELSE '정상' 
+			END
+		 END SELLYN
+			,MAKECOM
+			,WRITER
+			,COPYYEAR
+			,SETYN
+			,AMOUNT_REAL
+			,AMOUNT_VIRTUAL
+			,AMOUNT_SAFTY
+			,SAFTY
+			,FIRSTTITLE
+			,SECONDTITLE
+			,ISNULL(RootTitle, '루트') ROOTTITLE
+			,C.AM_NAME
+			,GW.NAME REGUSER
+			,ADMINNAME
+		FROM (
+			SELECT PRODID
+				,CATEGORYID
+				,PRODNAME
+				,KEYWORD
+				,BUYPRICE
+				,SELLPRICE
+				,STDPRICE
+				,SHIPPRICE
+				,DISPERCENT
+				,APPEPASSCASH
+				,IMGFILE
+				,UNITNAME
+				,SELLYN
+				,MAKECOM
+				,WRITER
+				,COPYYEAR
+				,SETYN
+				,AMOUNT_REAL
+				,AMOUNT_VIRTUAL
+				,AMOUNT_SAFTY
+				,CASE 
+					WHEN AMOUNT_REAL - AMOUNT_SAFTY <= 0
+						THEN 'N'
+					ELSE 'Y'
+					END SAFTY
+				,REGUSER
+			FROM BM_PROD
+			) P
+		LEFT OUTER JOIN GW_SVR.GROUPWARE.DBO.MEMBER_TAB GW ON P.REGUSER = GW.MEMBERID
+		LEFT OUTER JOIN BM_BOOK_CATEGORY AS C ON P.CATEGORYID = C.AM_IDX
+		LEFT OUTER JOIN BM_BOOK_CATEGORY_AUTH AS CA ON C.AM_IDX = CA.CATEGORYID
+		LEFT OUTER JOIN (
+			SELECT A.AM_IDX
+				,B.AM_NAME FIRSTTITLE
+				,A.AM_NAME SECONDTITLE
+				,C.AM_NAME ROOTTITLE
+			FROM BM_BOOK_CATEGORY A
+			LEFT OUTER JOIN BM_BOOK_CATEGORY B ON A.AM_TOPIDX = B.AM_IDX
+			LEFT OUTER JOIN BM_BOOK_CATEGORY C ON B.AM_TOPIDX = C.AM_IDX
+			) CCA ON P.CATEGORYID = CCA.AM_IDX
+		LEFT OUTER JOIN (
+			SELECT PRODID
+				,STUFF((
+						SELECT ', ' + A1.ADMINNAME
+						FROM (
+							SELECT ADMINNAME
+								,PRODID
+							FROM BM_BOOK_MANAGER A
+							LEFT OUTER JOIN (
+								SELECT NAME ADMINNAME, MEMBERID ADMINIDX , USERID ADMINID, TEAMNAME
+								FROM GW_SVR.GROUPWARE.DBO.MEMBER_VIEW
+								WHERE GPCODE = 'EPK'
+								) B ON A.USERID = B.ADMINID
+							) A1
+						WHERE (A1.PRODID = A.PRODID)
+						FOR XML PATH('')
+						), 1, 2, '') AS ADMINNAME
+			FROM (
+				SELECT ADMINNAME
+					,PRODID
+				FROM BM_BOOK_MANAGER A
+				LEFT OUTER JOIN (
+								SELECT USERID ADMINID, NAME ADMINNAME,TEAMNAME
+								FROM GW_SVR.GROUPWARE.DBO.MEMBER_VIEW
+								WHERE GPCODE = 'EPK'
+					
+				) B ON A.USERID = B.ADMINID
+			) A
+			GROUP BY PRODID
+			) BM ON P.PRODID = BM.PRODID
+		WHERE p.PRODID <> ''
+			AND C.AM_USEYN = 'Y'
+			AND CA.USED = 'Y'
+		ORDER BY PRODID DESC
+	]]>
+	</select>
+	
+	<!-- 통합상품 prodid 가져오기 -->
+	<select id="selectProdCount" resultType="int" >
+		SELECT IsNull(MAX(PRODID),0) FROM BM_PROD
+	</select>
+	
+	<!-- 통합상품 등록 -->
+	<insert id="PRODID"	parameterType="java.util.HashMap">
+		INSERT INTO  BM_PROD
+				(PRODID, GROUPID, CATEGORYID, PRODNAME, KEYWORD, BUYPRICE, SELLPRICE, STDPRICE, SHIPPRICE, 
+				 DISPERCENT, APPEPASSCASH,IMGFILE,STDDSC, DETAILDSC, UNITNAME, SALEAMT, SELLYN, SORTID, MAKECOM,
+				 WRITER, ISBN, PAGECNT, COPYYEAR, INDEXDSC, SITEURL,PAGEURL, WEIGHT, AMOUNT_REAL,AMOUNT_REAL2,  
+				 AMOUNT_VIRTUAL, AMOUNT_SAFTY, SETYN, REGUSER )
+		VALUES (#{PRODID}, '00000', #{CategoryID}, #{PRODNAME}, #{KEYWORD}, #{BUYPRICE}, #{SELLPRICE}, #{STDPRICE}, #{SHIPPRICE}, 
+				#{DISPERCENT}, #{APPEPASSCASH},#{FA_FILENAME}, #{STDDSC}, #{DETAILDSC}, #{UNITNAME}, '0', #{SELLYN}, '1', #{MAKECOM},
+				#{WRITER}, #{ISBN}, #{PAGECNT}, #{COPYYEAR}, #{INDEXDSC}, '00', 'http://', #{WEIGHT}, #{AMOUNT_REAL}, #{AMOUNT_REAL2},
+				#{AMOUNT_VIRTUAL}, #{AMOUNT_SAFTY}, 'n', #{ADMINIDX}
+				)
+	</insert>
+	
+	 
+	<insert id="insertFileAttachInfo" parameterType="java.util.HashMap" >
+			<![CDATA[
+				INSERT INTO BM_FILEATTACH (
+					FD_IDX,			FA_FILEPATH,	FA_FILENAME,	FA_FILESIZE,		FA_EXT,
+					FA_SORTNO,		FA_REGUSER,		FA_REGDT,		FA_EDITUSER,		FA_EDITDT,
+					FA_USEYN
+				) VALUES (
+					#{PRODID},				#{FA_FILEPATH},			#{FA_FILENAME},			#{FA_FILESIZE},			#{FA_EXT},
+					#{FA_SORTNO},		#{FA_REGUSER},			GETDATE(),					#{FA_EDITUSER},			GETDATE(),
+					'Y'
+				)
+			]]>	
+	</insert>
+	
+	 <!--
+	<insert id="insertFileAttachInfo" parameterType="java.util.HashMap" >
+		<selectKey  resultType="java.lang.Integer"  keyProperty="maxfileidx">
+			<![CDATA[
+				INSERT INTO BM_FILEATTACH (
+					FD_IDX,			FA_FILEPATH,	FA_FILENAME,	FA_FILESIZE,		FA_EXT,
+					FA_SORTNO,		FA_REGUSER,		FA_REGDT,		FA_EDITUSER,		FA_EDITDT,
+					FA_USEYN
+				) VALUES (
+					#{PRODID},				#{FA_FILEPATH},			#{FA_FILENAME},			#{FA_FILESIZE},			#{FA_EXT},
+					#{FA_SORTNO},		#{FA_REGUSER},			GETDATE(),					#{FA_EDITUSER},			GETDATE(),
+					'Y'
+				)
+				SELECT IDENT_CURRENT('BM_FILEATTACH') as maxfileidx
+			]]>	
+		</selectKey>
+	</insert>-->
+	
+	<select id="selectGoodsUpdateList" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+		SELECT 
+			A.PRODID, GROUPID, CATEGORYID, PRODNAME, KEYWORD, BUYPRICE, SELLPRICE, STDPRICE, SHIPPRICE, 
+			DISPERCENT, APPEPASSCASH,IMGFILE,STDDSC, DETAILDSC, UNITNAME, SALEAMT, SELLYN, SORTID, MAKECOM,
+			WRITER, ISBN, PAGECNT, COPYYEAR, INDEXDSC, SITEURL,PAGEURL, WEIGHT, AMOUNT_REAL,AMOUNT_REAL2,  
+			AMOUNT_VIRTUAL, AMOUNT_SAFTY, SETYN, REGUSER, B.AM_NAME,C.ADMINNAME
+		FROM 
+			BM_PROD A WITH(NOLOCK)
+		LEFT OUTER JOIN BM_BOOK_CATEGORY B WITH(NOLOCK) ON A.CATEGORYID = B.AM_IDX 
+		LEFT OUTER JOIN (SELECT MEMBERID ADMINIDX, NAME ADMINNAME FROM GW_SVR.GROUPWARE.DBO.MEMBER_VIEW GROUP BY  MEMBERID,NAME) C ON A.REGUSER = C.ADMINIDX
+		WHERE
+			A.PRODID = #{PRODIDNUM}			
+	</select>
+	
+	<update id="updateGoods" parameterType="java.util.HashMap">
+		UPDATE
+			 BM_PROD
+		SET
+			 CATEGORYID = #{CategoryID}, PRODNAME = #{PRODNAME}, KEYWORD = #{KEYWORD}, BUYPRICE = #{BUYPRICE}, SELLPRICE =#{SELLPRICE},
+			 STDPRICE = #{STDPRICE}, SHIPPRICE = #{SHIPPRICE}, DISPERCENT = #{DISPERCENT}, APPEPASSCASH = #{APPEPASSCASH},
+			 STDDSC = #{STDDSC}, DETAILDSC = #{DETAILDSC}, UNITNAME = #{UNITNAME}, SELLYN = #{SELLYN}, 
+			 MAKECOM = #{MAKECOM}, WRITER = #{WRITER}, ISBN = #{ISBN}, PAGECNT = #{PAGECNT}, COPYYEAR = #{COPYYEAR}, INDEXDSC = #{INDEXDSC},
+			 WEIGHT = #{WEIGHT}, AMOUNT_REAL = #{AMOUNT_REAL}, AMOUNT_REAL2 = #{AMOUNT_REAL2}, AMOUNT_VIRTUAL = #{AMOUNT_VIRTUAL}, 
+			 AMOUNT_SAFTY = #{AMOUNT_SAFTY}, REGUSER = #{ADMINIDX}
+			 <include refid="goodsWhere"></include>
+		WHERE 
+			PRODID = #{PRODIDNUM}	
+	</update>
+	
+	 
+	<insert id="insertBookManager" parameterType="java.util.HashMap">
+		INSERT INTO 
+			BM_BOOK_MANAGER(USERID, PRODID ) 
+		VALUES
+			(#{AdminID}, #{PRODID})
+	</insert>
+	
+	<select id="selectMaxfileidx" resultType="int" >
+		SELECT IDENT_CURRENT('BM_FILEATTACH') AS maxfileidx
+	</select>
+
+	<!-- 게시판 첨부파일 리스트 -->
+	<select id="selectFileAttachInfo" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+		SELECT 
+			FA_IDX,
+			FD_IDX,
+			FA_FILEPATH,
+			FA_FILENAME,
+			FA_FILESIZE,
+			FA_EXT,
+			FA_SORTNO,
+			FA_REGUSER,
+			FA_REGDT,
+			FA_EDITUSER,
+			FA_EDITDT,
+			FA_USEYN
+		FROM BM_FILEATTACH WITH(NOLOCK)
+		WHERE FD_IDX = #{PRODIDNUM}
+		AND FA_USEYN = 'Y' 
+		ORDER BY FA_SORTNO
+	</select>
+	
+	<!-- 게시판 첨부파일 정보 추출 -->
+	<select id="selectFileInfo" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+		SELECT 
+			A.FA_IDX,
+			A.FD_IDX,
+			A.FA_FILEPATH,
+			A.FA_FILENAME,
+			A.FA_FILESIZE,
+			A.FA_EXT,
+			A.FA_SORTNO,
+			A.FA_REGUSER,
+			A.FA_REGDT,
+			A.FA_EDITUSER,
+			A.FA_EDITDT,
+			A.FA_USEYN,
+			B.PRODID
+		FROM BM_FILEATTACH A WITH(NOLOCK)
+		INNER JOIN BM_PROD B WITH(NOLOCK) ON A.FD_IDX = B.PRODID
+		WHERE A.FA_IDX = #{FA_IDX}		
+	</select>
+	
+	<delete id="deleteFileAttach" parameterType="java.util.HashMap" >
+		DELETE FROM 
+			BM_FILEATTACH 
+		WHERE 
+			FD_IDX = #{PRODIDNUM}	
+	</delete>
+	
+	<!-- ManagerL All List -->
+	<select id="selectManagerList" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+		SELECT B.USERID ADMINID
+			,AD_IDX
+			,AG_IDX
+			,AD_REGUSER
+			,AD_REGDT
+			,MB_IDX
+			,AD_NAME
+			,AD_EMAIL
+			,AD_TEL
+		FROM BM_ADMIN A
+		INNER JOIN GW_SVR.GROUPWARE.DBO.MEMBER_VIEW B ON A.AD_IDX = B.MEMBERID
+		WHERE AG_IDX = '2'
+	</select>
+	
+	<!-- ManagerL List -->
+	<select id="selectManager" parameterType="java.util.HashMap" resultType="java.util.HashMap">	
+		SELECT A.IDX
+			,A.USERID
+			,A.PRODID
+			,B.NAME ADMINNAME
+		FROM BM_BOOK_MANAGER A
+		INNER JOIN GW_SVR.GROUPWARE.DBO.MEMBER_VIEW B ON A.USERID = B.USERID
+		WHERE PRODID = #{PRODID}
+	</select>
+	
+	<insert id="insertBooksManager" parameterType="java.util.HashMap">
+		INSERT INTO 
+			BM_BOOK_MANAGER(USERID, PRODID ) 
+		VALUES(#{USERID}, #{PRODID})
+	</insert>
+	
+	<delete id="deleteBooksManager" parameterType="java.util.HashMap">
+		DELETE FROM
+			BM_BOOK_MANAGER
+		WHERE USERID = #{USERID}  AND PRODID = #{PRODID}
+	</delete>
+	
+	<select id="selectBooksImage" parameterType="java.util.HashMap" resultType="String">
+		SELECT TOP 1
+			IMGFILE 
+		FROM 
+			BM_PROD
+		WHERE 
+			ISBN = #{ISBNNUM}
+		ORDER BY REGDT DESC 
+	</select>
+	
+	<select id="getProdid" parameterType="java.util.HashMap" resultType="String">
+		SELECT TOP 1
+			PRODID
+		FROM 
+			BM_PROD
+		WHERE 
+			ISBN = #{S_Keyword}
+		ORDER BY REGDT DESC 
+	</select>
+	
+	<update id="updateAmountReal3" parameterType="java.util.HashMap">
+		UPDATE
+			BM_PROD
+		SET
+			AMOUNT_REAL3 = #{TCNT}
+		WHERE 
+			PRODID = #{PRODID}
+	</update>
+	
+	<insert id="insertProdHis" parameterType="java.util.HashMap">
+		INSERT INTO 
+			BM_PRODUPDATEHIS(PRODID, PRODNAME, AMOUNT_REAL3, WRITER ) 
+		VALUES(#{PRODID}, #{PRODNAME}, #{TCNT}, #{ADMINNAME})
+	</insert>
+	
+	<select id="getTotalJongnoGoodsLogCount" parameterType="java.util.HashMap" resultType="Int">
+		SELECT
+			COUNT(*)
+		FROM
+			BM_PRODUPDATEHIS
+	</select>
+	
+	<select id="getTotalJongnoGoodsLog" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+		<![CDATA[
+		SELECT * FROM
+      	(
+          SELECT
+	          	 ROW_NUMBER() OVER(ORDER BY IDX DESC) AS ROWNUM
+				,PRODID
+				,PRODNAME
+				,AMOUNT_REAL3
+				,WRITER
+				,REGDATE
+		FROM 
+			BM_PRODUPDATEHIS
+			]]>
+			WHERE 1 = 1
+		) AS TT
+       WHERE TT.ROWNUM BETWEEN #{beginNum} AND #{endNum}
+	</select>
+	
+	<select id="getBarcodeOrderDetail" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+		WITH ORDERINFO(ORDERCODE, INFO,ZIPCODE,ADDR1,ADDR2,SHIPMESSAGE,TEL,HP,RECEIVER)
+		AS(
+			SELECT 
+				A.ORDERCODE
+				,ISNULL(ISBN,' ') +'||' +A.PRODID+'||'+PRODNAME+'||'+cast(request_cnt as varchar(5)) 
+				,A.ZIPCODE
+				,A.ADDR1
+				,A.ADDR2	
+				,A.SHIPMESSAGE
+				,A.TEL
+				,A.HP
+				,A.RECEIVER
+			  FROM 
+			  	BM_DELIVERY_REQUEST A 
+			  	INNER JOIN BM_DELIVERY_RESPONSE B ON A.DR_IDX = B.DR_IDX
+				INNER JOIN BM_PROD C ON B.PRODID=C.PRODID
+			  WHERE 
+				ORDERCODE = #{ORDERCODE}
+			)
+
+		SELECT ORDERCODE, INFO,ZIPCODE,ADDR1,ADDR2,SHIPMESSAGE,TEL,HP,RECEIVER 
+		FROM (
+				SELECT  A.ordercode , STUFF((
+												SELECT '@ ' + A1.INFO
+		  										FROM ORDERINFO A1
+		  										WHERE (A1.ORDERCODE = A.ORDERCODE)
+		  										FOR XML PATH ('')),1,1,'') INFO
+		  				,ZIPCODE,ADDR1,ADDR2,SHIPMESSAGE,TEL,HP,RECEIVER
+		 FROM ORDERINFO A
+			GROUP BY A.ORDERCODE,ZIPCODE,ADDR1,ADDR2,SHIPMESSAGE,TEL,HP,RECEIVER
+		) KK
+	</select>
+</mapper>
+

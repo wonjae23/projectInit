@@ -1,0 +1,100 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="bmsCategory">
+	
+	<sql id="categoryWhere">
+		<if test="Data_Status !=null and Data_Status != '' " > 
+			AND DATA_STATUS=#{DATA_STATUS}
+		</if>
+		
+		
+		<if test="sdate !=null and sdate != '' or edate !=null and edate != '' " > 
+			<![CDATA[
+			AND (
+					(	
+						REGDATE >= #{sdate} AND REGDATE < #{edate}
+					)
+			OR REGDATE = '1900-01-01'
+				)
+			]]>
+		</if>
+		
+		<if test="S_KeySearch !=null and S_KeySearch != '' " > 
+			<![CDATA[
+			AND #{S_KeySearch} = #{searchKEYWORD}
+			]]>
+		</if>
+		
+	</sql>
+	
+	<!-- category List count -->
+	<select id="selectCategoryBuyingListCount" parameterType="java.util.HashMap" resultType="int">
+		SELECT COUNT(A.INPUTCODE)
+		FROM BM_INPUT A
+		LEFT OUTER JOIN BM_PROD B ON A.PRODID = B.PRODID	
+		LEFT OUTER JOIN (SELECT * FROM GW_SVR.GWROUPWARE.DBO.MEMBER_VIEW WHERE GPCODE='EPK' or GPCODE='003')C ON A.USERID = C.ADMINID
+		LEFT OUTER JOIN BM_COMMON_CODE D ON A.INCENTER = D.CMCODE
+		LEFT OUTER JOIN BM_COMMON_CODE E ON A.DATA_STATUS = E.CMCODE
+		LEFT OUTER JOIN BM_COMMON_CODE F ON A.INPUTTYPE = F.CMCODE
+		<!--  LEFT OUTER join erp_b_custom_v Z on A.customer=z.custom_code-->
+		WHERE 1=1
+		<include refid="categoryWhere" ></include>
+	</select>
+	
+	<!-- category List count -->
+	<select id="selectCategoryBuyingList" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+		SELECT * FROM ( 
+			SELECT ROW_NUMBER() OVER (ORDER BY A.INPUTCODE DESC) AS ROWNUM, 
+			A.INPUTCODE, 
+			B.PRODNAME, 
+			A.PRODID, 
+			A.INPUTCNT, 
+			A.ORDERCNT, 
+			CONVERT(VARCHAR(10), A.WISHDATE,120) WISHDATE , 
+			CONVERT(VARCHAR(10), A.REGDATE,120) REGDATE ,
+			C.ADMINNAME, 
+			C.TEAMNAME, 
+			D.NAME AS INCENTER, 
+			E.NAME AS DATA_STATUS, 
+			A.USERID, 
+			F.NAME AS INPUTTYPE, 
+			A.RERECEIVER, 
+			<!-- Z.CUSTOM_NAME,  -->
+			CONVERT(VARCHAR(10),A.RECEIPTDATE,120)RECEIPTDATE, 
+			A.BUYPRICE
+			FROM BM_INPUT A
+			LEFT OUTER JOIN BM_PROD B ON A.PRODID = B.PRODID	
+			LEFT OUTER JOIN (
+							SELECT NAME ADMINNAME, MEMBERID ADMINIDX , USERID ADMINID, TEAMNAME 
+							FROM GW_SVR.GROUPWARE.DBO.MEMBER_VIEW 
+							WHERE GPCODE='EPK' or GPCODE='003'
+			)C ON A.USERID = C.ADMINID
+			LEFT OUTER JOIN BM_COMMON_CODE D ON A.INCENTER = D.CMCODE
+			LEFT OUTER JOIN BM_COMMON_CODE E ON A.DATA_STATUS = E.CMCODE
+			LEFT OUTER JOIN BM_COMMON_CODE F ON A.INPUTTYPE = F.CMCODE
+			WHERE 1=1
+			<include refid="categoryWhere" ></include>
+		) PP WHERE ROWNUM BETWEEN #{beginNum} AND #{endNum}
+		ORDER BY INPUTCODE DESC
+	</select>
+	
+	<!-- BookGoods List count 
+	<select id="selectGoodsBookListCount" parameterType="java.util.HashMap" resultType="int">
+		<![CDATA[
+		SELECT COUNT(PRODID)
+		FROM BM_PROD AS P 
+		INNER JOIN 
+			(SELECT * FROM  C_CATEGORY WHERE CATEGORYID IN (
+				SELECT CATEGORYID FROM C_CATEGORY WHERE CATEGORYID IN (10069,10323,10324,10339)
+				UNION ALL
+				SELECT CATEGORYID FROM C_CATEGORY WHERE UPPERID IN (10069,10323,10324,10339)
+				UNION ALL
+				SELECT CATEGORYID FROM C_CATEGORY WHERE UPPERID IN ( SELECT CATEGORYID FROM C_CATEGORY WHERE UPPERID IN (10069,10323,10324,10339)
+			) AS C ON P.CATEGORYID = C.CATEGORYID
+		INNER JOIN C_CATEGORY_AUTH AS CA ON C.CATEGORYID = CA.CATEGORYID
+		WHERE PRODID <> '' AND C.STATUS='Y' AND CA.USED='Y'
+		]]>
+	</select>-->
+	
+</mapper>

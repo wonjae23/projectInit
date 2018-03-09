@@ -1,0 +1,421 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="groupWareMenu">
+	
+	<!-- MENU TREE WHERE CONDITION -->
+	<sql id="menuTreeWhere">
+		<if test="AM_IDX !=null and AM_IDX != '' " > 
+		AND AM_IDX=#{AM_IDX}
+		</if>
+		<if test="AM_IDX ==null or AM_IDX == '' " > 
+		AND AM_TOPIDX=0
+		</if>
+	</sql>
+	
+	<sql id="booksTreeWhere">
+		<if test="AD_IDX !=null and AM_IDX != '' " > 
+			AND AM_IDX='66' OR AM_TOPIDX='66'
+		</if>
+	</sql>
+	
+	<sql id="cateAuthWhere">
+		<if test="AD_NAME !=null and AD_NAME != '' " > 
+			AND NAME LIKE '%'+#{AD_NAME}+'%'
+		</if>
+	</sql>
+	
+	<!-- all menu list -->
+	<select id="selectMenuTreeList"  parameterType="java.util.HashMap" resultType="java.util.HashMap"  >
+		<![CDATA[
+			WITH AMENU(AM_IDX,AM_TOPIDX,AM_NAME,AM_URL,AM_ORDER,AM_USEYN,AM_LEVEL,SORT_NO)
+			AS (
+				SELECT 
+					AM_IDX,AM_TOPIDX,AM_NAME,AM_URL,AM_ORDER,AM_USEYN,AM_LEVEL
+					,REPLICATE('0', 3 - LEN(CONVERT(VARCHAR(MAX), AM_ORDER))) + CONVERT(VARCHAR(MAX), AM_ORDER) AS SORT_NO
+				FROM BM_ADMINMENU WITH(NOLOCK)
+				WHERE AM_USEYN='Y'
+				]]>	
+				<include refid="menuTreeWhere" ></include>
+				<![CDATA[			
+				UNION ALL
+				SELECT 
+					A.AM_IDX,A.AM_TOPIDX,A.AM_NAME,A.AM_URL,A.AM_ORDER,A.AM_USEYN,A.AM_LEVEL	
+					, CONVERT(VARCHAR(MAX),B.SORT_NO) + REPLICATE('0', 3 - LEN(CONVERT(VARCHAR(MAX), A.AM_ORDER))) + CONVERT(VARCHAR(MAX), A.AM_ORDER) AS SORT_NO		
+				FROM BM_ADMINMENU AS A WITH(NOLOCK)
+				INNER JOIN AMENU B 
+				ON A.AM_TOPIDX=B.AM_IDX
+				WHERE A.AM_USEYN='Y'
+			  )
+		]]>
+
+		<if test="AG_IDX ==''">
+			SELECT		
+				*			
+			FROM AMENU	
+			ORDER BY SORT_NO ASC
+		</if>
+		<if test="AG_IDX !=null and AG_IDX != ''">		
+			SELECT		
+				AM.*, AA.*			
+			FROM AMENU AS AM WITH(NOLOCK)
+			INNER JOIN 
+			BM_ADMINGRPAUTH AS AA WITH(NOLOCK)
+			ON AM.AM_IDX=AA.AM_IDX
+			WHERE AA.AA_ASIGN='Y'
+			AND AA.AG_IDX = #{AG_IDX} 
+			ORDER BY AM.SORT_NO ASC
+		</if>	
+	</select>	
+	
+	
+	<!-- auth top menu list : 권한이 부여된 top menu 조회 -->
+	<select id="selectAuthTopMenuList" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+	<![CDATA[
+		SELECT 
+			AM.AM_IDX,AM.AM_TOPIDX,AM.AM_NAME,AM.AM_URL,AM.AM_ORDER,AM.AM_USEYN,
+			AM.AM_LEVEL,AM.AM_REGUSER,AM.AM_REGDT,AM.AM_EDITUSER,AM.AM_EDITDT,
+			AG.AA_ASIGN,AG.AA_ENTR,AG.AA_EDIT,AG.AA_DEL,AG.AA_EXCL   
+		FROM BM_ADMINMENU AS AM WITH(NOLOCK)
+		INNER JOIN 
+		BM_ADMINGRPAUTH AS AG WITH(NOLOCK)
+		ON AM.AM_IDX=AG.AM_IDX
+		WHERE AM.AM_USEYN='Y'
+		AND AM.AM_TOPIDX=0
+		AND AG.AG_IDX=#{AG_IDX}
+		ORDER BY AM.AM_ORDER ASC
+	]]>
+	</select>	
+	
+	
+	<!-- top menu list -->
+	<select id="selectTopMenuList" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+	<![CDATA[
+		SELECT 
+			AM_IDX,    
+			AM_TOPIDX,      
+			AM_NAME,          
+			AM_URL,      
+			AM_ORDER,      
+			AM_USEYN,      
+			AM_LEVEL,
+			AM_REGUSER,      
+			AM_REGDT,      
+			AM_EDITUSER,       
+			AM_EDITDT      
+		FROM BM_ADMINMENU 
+		WHERE AM_USEYN='Y'
+		AND AM_TOPIDX=0
+		ORDER BY AM_ORDER ASC
+	]]>
+	</select>	
+	
+	<!-- left menu list -->
+	<select id="selectLeftMenuList" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+	<![CDATA[
+		SELECT 
+			AM_IDX,    
+			AM_TOPIDX,      
+			AM_NAME,          
+			AM_URL,      
+			AM_ORDER,      
+			AM_USEYN,      
+			AM_LEVEL,
+			AM_REGUSER,      
+			AM_REGDT,      
+			AM_EDITUSER,       
+			AM_EDITDT      
+		FROM BM_ADMINMENU 
+		WHERE AM_USEYN='Y'
+		AND AM_TOPIDX=#{AM_TOPIDX}
+	]]>
+	</select>	
+	
+	<!-- menu info select : menu idx -->
+	<select id="selectMenuInfo" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+		SELECT 
+			AM_IDX,    
+			AM_TOPIDX,      
+			AM_NAME,          
+			AM_URL,      
+			AM_ORDER,      
+			AM_USEYN,      
+			AM_LEVEL,
+			AM_REGUSER,      
+			AM_REGDT,      
+			AM_EDITUSER,       
+			AM_EDITDT      
+		FROM BM_ADMINMENU 
+		WHERE AM_USEYN='Y'		
+		AND AM_IDX=#{AM_IDX}		
+	</select>	
+	
+	<!-- menu info select : menu url -->
+	<select id="selectMenuInfoByURL" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+		SELECT TOP 1 * FROM
+		(		
+			SELECT 
+				ROW_NUMBER() OVER(ORDER BY AM_LEVEL ASC) AS RNUM,
+				AM_IDX,    
+				AM_TOPIDX,      
+				AM_NAME,          
+				AM_URL,      
+				AM_ORDER,      
+				AM_USEYN,      
+				AM_LEVEL,
+				AM_REGUSER,      
+				AM_REGDT,      
+				AM_EDITUSER,       
+				AM_EDITDT      
+			FROM BM_ADMINMENU 
+			WHERE AM_USEYN='Y'
+			AND AM_URL=#{AM_URL}	
+		) A 
+		WHERE A.RNUM=1
+	</select>	
+	
+	<!-- menu info insert -->
+	<insert id="insertMenuInfo" parameterType="java.util.HashMap">
+		INSERT INTO BM_ADMINMENU
+			(AM_TOPIDX,AM_NAME,AM_URL,AM_ORDER,AM_USEYN,AM_LEVEL,AM_REGUSER,AM_EDITUSER)
+		VALUES
+			(#{AM_TOPIDX},#{AM_NAME},#{AM_URL},#{AM_ORDER},#{AM_USEYN},#{AM_LEVEL},#{AM_REGUSER},#{AM_REGUSER})
+	</insert>
+	
+	<!-- menu info update -->
+	<update id="updateMenuInfo" parameterType="java.util.HashMap">
+		UPDATE BM_ADMINMENU SET
+			AM_NAME=#{AM_NAME},
+			AM_URL=#{AM_URL},
+			AM_ORDER=#{AM_ORDER},
+			AM_USEYN=#{AM_USEYN}
+		WHERE AM_IDX=#{AM_IDX}
+	</update>
+	
+	<!-- location info select -->
+	<select id="selectLocationInfoList" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+		SELECT
+			AM_IDX, AM_TOPIDX, AM_NAME, AM_URL, AM_LEVEL
+		FROM	
+		(	
+			SELECT
+				AM_IDX, AM_TOPIDX, AM_NAME, AM_URL, AM_LEVEL
+			FROM BM_ADMINMENU
+			WHERE AM_IDX=#{AM_IDX}
+			
+			UNION ALL
+			
+			SELECT
+				AM_IDX, AM_TOPIDX, AM_NAME, AM_URL, AM_LEVEL
+			FROM BM_ADMINMENU 
+			WHERE AM_IDX = (
+							SELECT AM_TOPIDX 
+							FROM BM_ADMINMENU 
+							WHERE AM_IDX=#{AM_IDX})
+			
+			UNION ALL
+			
+			SELECT
+				AM_IDX, AM_TOPIDX, AM_NAME, AM_URL, AM_LEVEL
+			FROM BM_ADMINMENU
+			WHERE AM_IDX = (
+							SELECT 
+							AM_TOPIDX
+							FROM BM_ADMINMENU AS AM WITH(NOLOCK)
+							WHERE AM_IDX = (
+											SELECT AM_TOPIDX 
+											FROM BM_ADMINMENU 
+											WHERE AM_IDX=#{AM_IDX})
+							)
+			) AS A
+		ORDER BY AM_LEVEL ASC	
+	</select>
+	
+	<!-- 메뉴권한체크 -->
+	<select id="selectBmsMenuAuth" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+		SELECT 
+			AA_ASIGN,AA_ENTR,AA_EDIT,AA_DEL,AA_EXCL
+		FROM BM_ADMINGRPAUTH
+		WHERE AM_IDX=#{AM_IDX}
+		AND AG_IDX=#{AG_IDX}
+	</select>
+	
+	<!-- 도서 menu list -->
+	<select id="selectCateTopMenuList" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+	<![CDATA[
+		SELECT 
+			AM_IDX,    
+			AM_TOPIDX,      
+			AM_NAME,          
+			AM_URL,      
+			AM_ORDER,      
+			AM_USEYN,      
+			AM_LEVEL,
+			AM_REGUSER,      
+			AM_REGDT,      
+			AM_EDITUSER,       
+			AM_EDITDT      
+		FROM BM_BOOK_CATEGORY 
+		WHERE AM_USEYN='Y'
+		AND AM_TOPIDX=0
+		ORDER BY AM_ORDER ASC
+	]]>
+	</select>	
+	
+
+	
+	<select id="selectCateMenuTreeList"  parameterType="java.util.HashMap" resultType="java.util.HashMap"  >
+		<![CDATA[
+			SELECT 
+				AM_IDX,AM_TOPIDX,AM_NAME,AM_URL,AM_ORDER,AM_USEYN,AM_LEVEL
+				,REPLICATE('0', 3 - LEN(CONVERT(VARCHAR(MAX), AM_ORDER))) + CONVERT(VARCHAR(MAX), AM_ORDER) AS SORT_NO
+			FROM 
+				BM_BOOK_CATEGORY WITH(NOLOCK)
+			WHERE 
+				AM_USEYN = 'Y'
+		]]>
+	</select>	
+	
+	<!-- 도서 menu info select : menu idx -->
+	<select id="selectCateInfo" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+		SELECT 
+			AM_IDX,    
+			AM_TOPIDX,      
+			AM_NAME,          
+			AM_URL,      
+			AM_ORDER,      
+			AM_USEYN,      
+			AM_LEVEL,
+			AM_REGUSER,      
+			AM_REGDT,      
+			AM_EDITUSER,       
+			AM_EDITDT      
+		FROM BM_BOOK_CATEGORY 
+		WHERE AM_USEYN='Y'		
+		AND AM_IDX=#{AM_IDX}		
+	</select>	
+	
+	<!-- left menu list -->
+	<select id="selectCateLeftMenuList" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+	<![CDATA[
+		SELECT 
+			AM_IDX,    
+			AM_TOPIDX,      
+			AM_NAME,          
+			AM_URL,      
+			AM_ORDER,      
+			AM_USEYN,      
+			AM_LEVEL,
+			AM_REGUSER,      
+			AM_REGDT,      
+			AM_EDITUSER,       
+			AM_EDITDT      
+		FROM BM_BOOK_CATEGORY 
+		WHERE AM_USEYN='Y'
+		AND AM_TOPIDX=#{AM_TOPIDX}
+	]]>
+	</select>
+	
+	<!-- Book menu info insert -->
+	<insert id="insertBookMenuInfo" parameterType="java.util.HashMap">
+		INSERT INTO BM_BOOK_CATEGORY
+			(AM_TOPIDX,AM_NAME,AM_URL,AM_ORDER,AM_USEYN,AM_LEVEL,AM_REGUSER,AM_EDITUSER)
+		VALUES
+			(#{AM_TOPIDX},#{AM_NAME},#{AM_URL},#{AM_ORDER},#{AM_USEYN},#{AM_LEVEL},#{AM_REGUSER},#{AM_REGUSER})
+	</insert>
+	
+	<!-- Book menu info update -->
+	<update id="updateBookMenuInfo" parameterType="java.util.HashMap">
+		UPDATE BM_BOOK_CATEGORY SET
+			AM_NAME=#{AM_NAME},
+			AM_URL=#{AM_URL},
+			AM_ORDER=#{AM_ORDER},
+			AM_USEYN=#{AM_USEYN}
+		WHERE AM_IDX=#{AM_IDX}
+	</update>
+	
+	<!-- 도서 운영자 리스트 카운트 -->
+	<select id="selectBookCategoryListCount" parameterType="java.util.HashMap" resultType="int">
+	<![CDATA[
+		SELECT COUNT(*)
+		FROM
+			GW_SVR.GROUPWARE.DBO.MEMBER_VIEW
+			WHERE (GPCODE ='EPK' OR GPCODE = '003')	AND (RECRUIT=1 OR RECRUIT=0 ) 					
+		
+	]]>
+		<include refid="cateAuthWhere"></include>
+	</select>
+	
+	<!-- 도서 운영자 리스트 목록  -->
+	<select id="selectBookCategoryList" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+	
+		SELECT (TOTALCNT-ROWNUM+1) AS NUM, * FROM
+                 (
+                   SELECT
+                       COUNT(*) OVER() AS TOTALCNT,
+                       ROW_NUMBER() OVER(ORDER BY GPSORTNO, DSORTNO, TSORTNO, RSORTNO) AS ROWNUM,
+						GPNAME,
+						DPTNAME,
+						TEAMNAME,
+						POSITIONNAME,
+						DUTYNAME,
+						NAME ADMINNAME,
+						MOBILE,
+						PHONE,
+						EMAIL,
+						MSN,
+						NATEON,
+						CPHONE,
+						GPCODE,
+						DCODE,
+						TCODE,
+						WEDDINGDAY,
+						CASE WEDDINGTYPE WHEN '양' THEN '+' WHEN '음' THEN '-' END WEDDINGTYPE,
+						CASE BIRTHCTG WHEN '1' THEN '+' WHEN '0' THEN '-' END BIRTHCTG,
+						MEMBERID ADMINIDX
+						FROM
+							GW_SVR.GROUPWARE.DBO.MEMBER_VIEW
+						WHERE (GPCODE ='EPK' OR GPCODE = '003')	AND (RECRUIT=1 OR RECRUIT=0 )  
+						<include refid="cateAuthWhere"></include>
+	   			 ) AS TT
+          WHERE TT.ROWNUM BETWEEN #{beginNum} AND #{endNum}	    
+	
+		
+	</select>
+	
+	<!-- 각 운영자별 도서 권한 조회  -->
+	<select id="selectBookAMCategoryList"  parameterType="java.util.HashMap" resultType="String"  >
+		<![CDATA[
+			SELECT 
+				CATEGORYID
+			FROM BM_BOOK_CATEGORY_AUTH
+			WHERE ADMINIDX = #{AD_IDX}
+		]]>
+	</select>
+	
+	<!-- 도서 카테고리 권한 삭제 -->
+	<delete id="deleteBookMenuAuth" parameterType="java.util.HashMap">
+		DELETE FROM
+			 BM_BOOK_CATEGORY_AUTH
+		WHERE 
+			ADMINIDX = #{AD_IDX}
+	</delete>
+	
+	
+	<!-- Book menu info insert -->
+	<insert id="insertBookMenuAuth" parameterType="java.util.HashMap">
+		INSERT INTO BM_BOOK_CATEGORY_AUTH
+			(CATEGORYID, ADMINIDX, USED, REGISTER)
+		VALUES
+			(#{CAMIDX},#{AD_IDX},'Y',#{ADMINIDX})
+	</insert>
+</mapper>
+
+
+
+
+
+
+
+
+

@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE configuration PUBLIC "-//mybatis.org//DTD Config 3.0//EN"  "http://mybatis.org/dtd/mybatis-3-config.dtd"> 
+<configuration>  
+	<settings>
+  		<setting name="cacheEnabled" value="false" />
+  		<setting name="useGeneratedKeys" value="true" />
+  		<setting name="defaultExecutorType" value="REUSE" />
+    </settings>
+    <mappers>
+        <mapper resource="framework/sqlmap/common/bms_common.xml"/>
+        <mapper resource="framework/sqlmap/common/bms_main.xml"/>
+        <mapper resource="framework/sqlmap/system/bms_menu.xml"/>
+        <mapper resource="framework/sqlmap/system/bms_operator.xml"/>
+        <mapper resource="framework/sqlmap/system/bms_group.xml"/>
+        <mapper resource="framework/sqlmap/system/bms_log.xml"/>
+        <mapper resource="framework/sqlmap/system/bms_exception.xml"/>
+        <mapper resource="framework/sqlmap/ebook/bms_ebook.xml"/>
+        <mapper resource="framework/sqlmap/category/bms_category.xml"/>
+        <mapper resource="framework/sqlmap/goods/bms_goods.xml"/>
+        <mapper resource="framework/sqlmap/warehousing/bms_warehousing.xml"/>
+        <mapper resource="framework/sqlmap/delivery/bms_delivery.xml"/>
+        <mapper resource="framework/sqlmap/release/bms_release.xml"/>
+        <mapper resource="framework/sqlmap/inventory/bms_inventory.xml"/>
+    </mappers>
+</configuration>

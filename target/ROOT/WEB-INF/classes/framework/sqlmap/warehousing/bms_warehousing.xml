@@ -1,0 +1,567 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="bmsWarehousing">
+	
+	<sql id="warehousingWhere">
+		<if test="List_Data_Status == '158001' ">
+			AND E.NAME ='신청'		
+		</if>
+		<if test="List_Data_Status == '158002' ">
+			AND E.NAME ='승인'		
+		</if>
+		<if test="List_Data_Status == '158003' ">
+			AND E.NAME ='완료'		
+		</if>
+		<if test="List_Data_Status == '158005' ">
+			AND E.NAME ='대기'		
+		</if>
+		<if test="List_Data_Status == '158004' ">
+			AND E.NAME ='취소'		
+		</if>
+		<if test="List_Data_Status == '158007' ">
+			AND InputType = '157002'		
+		</if>
+		<if test="List_Data_Status == '158008' ">
+			AND (E.NAME ='신청'	or E.NAME ='승인')	
+		</if>
+		
+		<if test="inputcode != null and inputcode != '' ">
+			AND INPUTCODE = #{inputcode}
+		</if>
+		<if test="searchKEYWORD != null and searchKEYWORD != '' ">
+			<choose>
+				<when test="searchKEYWORD == 'a.Inputcode' ">
+					AND a.Inputcode LIKE '%'+#{S_Keyword}+'%'
+				</when>
+				<when test="searchKEYWORD == 'c.adminname' ">
+					AND c.adminname = #{S_Keyword}
+				</when>
+				<when test="searchKEYWORD == 'c.teamname' ">
+					AND c.teamname LIKE '%'+#{S_Keyword}+'%'
+				</when>
+				<when test="searchKEYWORD == 'b.prodname' ">
+					AND b.prodname LIKE '%'+#{S_Keyword}+'%'
+				</when>
+				<when test="searchKEYWORD == 'b.makecom' ">
+					AND b.makecom LIKE '%'+#{S_Keyword}+'%'
+				</when>
+				<when test="searchKEYWORD == 'z.custom_name' ">
+					AND z.custom_name LIKE '%'+#{S_Keyword}+'%'
+				</when>
+				<when test="searchKEYWORD == 'd.name' ">
+					AND d.name LIKE '%'+#{S_Keyword}+'%'
+				</when>
+				<when test="searchKEYWORD == 'f.name' ">
+					AND f.name LIKE '%'+#{S_Keyword}+'%'
+				</when>
+				<when test="searchKEYWORD == 'a.rereceiver' ">
+					AND a.rereceiver LIKE '%'+#{S_Keyword}+'%'
+				</when>
+				<when test="searchKEYWORD == 'a.prodid' ">
+					AND a.prodid = #{S_Keyword}
+				</when>
+				<when test="searchKEYWORD == 'ISBN' ">
+					AND ISBN = #{S_Keyword}
+				</when>
+			</choose>
+		</if>
+		<if test="searchSTYPE != null and searchSTYPE != '' ">
+			<choose>
+				<when test="searchSTYPE == 'RegDate' ">
+					<![CDATA[
+						AND ((REGDATE >= #{sdate1}) and (REGDATE < #{edate1}))
+					]]>
+				</when>
+				<when test="searchSTYPE == 'WishDate' ">
+					<![CDATA[
+						AND ((WISHDATE >= #{sdate1}) and (WISHDATE < #{edate1}))
+					]]>
+				</when>
+				<when test="searchSTYPE == 'InputDate' ">
+					<![CDATA[
+						AND ((INPUTDATE >= #{sdate1}) and (INPUTDATE < #{edate1}))
+					]]>
+				</when>
+			</choose>
+		</if>
+		
+		<if test="sdate1 != null and sdate1 != '' ">
+			<![CDATA[
+			AND ((REGDATE >= #{sdate1}) and (REGDATE < #{edate1}))
+			]]>
+		</if>
+	</sql>
+	
+	<sql id="warehousingJongnoWhere">
+		<if test="jongnoSearchKEYWORD != null and jongnoSearchKEYWORD != '' ">
+			<choose>
+				<when test="jongnoSearchKEYWORD == 'isbn' ">
+					AND ISBN = #{S_Keyword}
+				</when>
+				<when test="jongnoSearchKEYWORD == 'writer' ">
+					AND WRITER = #{S_Keyword}
+				</when>
+				<when test="jongnoSearchKEYWORD == 'customername' ">
+					AND CUSTOMERNAME LIKE '%'+#{S_Keyword}+'%'
+				</when>
+			</choose>
+		</if>
+		AND DATEDIFF(D,#{sdate},INPUTDATE)>=0 AND DATEDIFF(D,INPUTDATE,#{edate})>=0
+	</sql>
+	
+	
+	<insert id="insertWarehousing" parameterType="java.util.HashMap" >
+		<![CDATA[
+			INSERT INTO BM_INPUT 
+				(INPUTCODE, PRODID, USERID, MARKETER, INCENTER, COMMENT, INPUTTYPE, RERECEIVER, NEWPROD, ORDERCNT, WISHDATE, 
+				 DATA_STATUS, DIRECTSEND, INPUTCNT, STDPRICE, DISPERCENT, BUYPRICE, TOTALPRICE, CUSTOMER, INPUTDATE, RECEIPTDATE)
+			VALUES
+				(#{InputCode}, #{prodid}, #{ADMINID}, #{marketer}, #{incenter}, #{comment}, #{inputtype}, #{rereceiver}, #{newprod}, #{ordercnt}, #{wishdate},
+				 #{data_status}, #{directsend}, #{inputcnt}, #{stdprice}, #{dispercent}, #{buyprice}, #{totalprice}, #{customer}, #{inputdate}, #{receiptDate} )
+		]]>
+	</insert>
+	
+	<select id="selectWarehousingList" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+			SELECT * FROM
+                    (
+                        SELECT                               
+                               ROW_NUMBER() OVER(ORDER BY INPUTCODE DESC) AS ROWNUM,
+                             A.INPUTCODE
+							,B.PRODNAME
+							,A.ProdID
+							,A.INPUTCNT
+							,A.ORDERCNT
+							,CONVERT(VARCHAR(10), A.WISHDATE, 120) WISHDATE
+							,CONVERT(VARCHAR(10), A.REGDATE, 120) REGDATE
+							,C.NAME ADMINNAME
+							,C.TEAMNAME
+							,D.NAME AS INCENTER
+							,E.NAME AS DATA_STATUS
+							,A.USERID
+							,F.NAME AS INPUTTYPE
+							,A.RERECEIVER
+							,Z.CUSTOM_NAME
+							,Convert(VARCHAR(10), A.ReceiptDate, 120) ReceiptDate
+							,A.BUYPRICE
+							,CONVERT(VARCHAR(10),A.INPUTDATE,120) INPUTDATE
+						FROM BM_INPUT A
+						LEFT OUTER JOIN BM_PROD B ON A.PRODID = B.PRODID
+						LEFT OUTER JOIN (
+							SELECT *
+							FROM GW_SVR.GROUPWARE.DBO.MEMBER_VIEW
+							WHERE GPCODE = 'EPK'
+								OR GPCODE = '003'
+							) C ON A.USERID = C.USERID
+						LEFT OUTER JOIN BM_COMMON_CODE D ON A.INCENTER = D.CMCODE
+						LEFT OUTER JOIN BM_COMMON_CODE E ON A.DATA_STATUS = E.CMCODE
+						LEFT OUTER JOIN BM_COMMON_CODE F ON A.INPUTTYPE = F.CMCODE
+						LEFT OUTER JOIN ERP_SVR.ERP.DBO.B_CUSTOM Z ON A.CUSTOMER = Z.CUSTOM_CODE
+						WHERE 1 = 1
+					    <include refid="warehousingWhere"></include>
+                    ) AS TT
+               WHERE TT.ROWNUM BETWEEN #{beginNum} AND #{endNum}
+	</select>
+	
+	<select id="selectWarehousingListCount" parameterType="java.util.HashMap" resultType="int">
+		    SELECT COUNT(*)                   
+			FROM BM_INPUT A
+			LEFT OUTER JOIN BM_PROD B ON A.PRODID = B.PRODID
+			LEFT OUTER JOIN (
+				SELECT NAME ADMINNAME, MEMBERID ADMINIDX , USERID ADMINID, TEAMNAME
+				FROM GW_SVR.GROUPWARE.DBO.MEMBER_VIEW
+				WHERE GPCODE = 'EPK'
+					OR GPCODE = '003'
+				) C ON A.USERID = C.ADMINID
+			LEFT OUTER JOIN BM_COMMON_CODE D ON A.INCENTER = D.CMCODE
+			LEFT OUTER JOIN BM_COMMON_CODE E ON A.DATA_STATUS = E.CMCODE
+			LEFT OUTER JOIN BM_COMMON_CODE F ON A.INPUTTYPE = F.CMCODE
+			LEFT OUTER JOIN ERP_SVR.ERP.DBO.B_CUSTOM Z ON A.CUSTOMER = Z.CUSTOM_CODE
+			WHERE 1 = 1
+			<include refid="warehousingWhere"></include>
+	</select>
+	
+	<select id="selectWarehousingDetail" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+		    SELECT A.INPUTCODE
+				  ,B.PRODNAME
+				  ,A.PRODID
+				  ,A.USERID
+				  ,A.MARKETER
+				  ,A.INCENTER
+				  ,A.COMMENT
+				  ,A.RERECEIVER
+				  ,A.NEWPROD
+				  ,A.ORDERCNT
+				  ,A.INPUTCNT
+				  ,A.STDPRICE
+				  ,A.DISPERCENT
+				  ,A.BUYPRICE
+				  ,A.TOTALPRICE
+				  ,A.CUSTOMER
+				  ,A.DATA_STATUS
+				  ,CONVERT(VARCHAR(10), A.INPUTDATE, 120) INPUTDATE
+				  ,CONVERT(VARCHAR(10), A.WISHDATE, 120) WISHDATE
+				  ,A.DIRECTSEND
+				  ,CONVERT(VARCHAR(10), A.REGDATE, 120) REGDATE
+				  ,C.ADMINNAME
+				  ,C.TEAMNAME
+				  ,A.INCENTER
+				  ,A.INPUTTYPE
+				  ,A.RERECEIVER
+				  ,Z.CUSTOM_NAME
+				  ,Convert(VARCHAR(10), A.ReceiptDate, 120) ReceiptDate
+				  ,A.REGDATE          
+			FROM BM_INPUT A
+			LEFT OUTER JOIN BM_PROD B ON A.PRODID = B.PRODID
+			LEFT OUTER JOIN (
+				SELECT NAME ADMINNAME, MEMBERID ADMINIDX , USERID ADMINID, TEAMNAME
+				FROM GW_SVR.GROUPWARE.DBO.MEMBER_VIEW
+				WHERE GPCODE = 'EPK'
+					OR GPCODE = '003'
+				) C ON A.USERID = C.ADMINID
+			LEFT OUTER JOIN BM_COMMON_CODE D ON A.INCENTER = D.CMCODE
+			LEFT OUTER JOIN BM_COMMON_CODE E ON A.DATA_STATUS = E.CMCODE
+			LEFT OUTER JOIN BM_COMMON_CODE F ON A.INPUTTYPE = F.CMCODE
+			LEFT OUTER JOIN ERP_SVR.ERP.DBO.B_CUSTOM Z ON A.CUSTOMER = Z.CUSTOM_CODE
+			WHERE 1 = 1
+			<include refid="warehousingWhere"></include>
+			ORDER BY INPUTCODE DESC
+	</select>
+	
+	<update id="updateWarehousing" parameterType="java.util.HashMap" >
+		<![CDATA[
+			UPDATE 
+				BM_INPUT 
+			SET
+				PRODID = #{prodid},
+				MARKETER = #{marketer},
+				INCENTER = #{incenter},
+				COMMENT = #{comment},
+				INPUTTYPE = #{inputtype},
+				RERECEIVER = #{rereceiver},
+				ORDERCNT = #{ordercnt},
+				INPUTCNT = #{inputcnt},
+				STDPRICE = #{stdprice},
+				DISPERCENT = #{dispercent},
+				BUYPRICE = #{buyprice},
+				TOTALPRICE = #{totalprice},
+				CUSTOMER = #{customer},
+				DATA_STATUS = #{data_status},
+				INPUTDATE = #{inputdate},
+				WISHDATE = #{wishdate},
+				DIRECTSEND = #{directsend},
+				REGDATE = GETDATE()
+			WHERE
+				INPUTCODE = #{InputCode}
+		]]>
+	</update>
+	
+	<insert id="insertWarehousXls" parameterType="java.util.HashMap">
+		INSERT INTO BM_INPUT ( 
+								INPUTCODE,		PRODID,		USERID,		MARKETER,	INCENTER,		COMMNET, 		
+								INPUTTYPE,		RERECEIVER,	NEWPROD,	ORDERCNT,	INPUTCNT,		STDPRICE,
+								DISPERCENT,		BUYPRICE,	TOTALPRICE,	CUSTOMER,	DATA_STATUS,	INPUTDATE,		
+								WISHDATE,		DIRECTSEND, REGDATE			 
+							)
+		SELECT 
+		INPUTCODE, PRODID,USERID,MARKETER,INCENTER,MEMO,INPUTTYPE,RERECEIVER,'N',CNT,CNT,P.STDPRICE,P.DISPERCENT,
+		P.BUYPRICE,CNT*P.BUYPRICE,CUSTOMERCODE, DATA_STATUS,INPUTDATE,WISHDATE,'N',GETDATE()
+		FROM
+							
+		<foreach collection="warehouseList" item="item" separator=" union all " index="index" open="(" close=")">
+			SELECT 	#{item.ISBN} ISBN,
+					#{item.INPUTCODE} INPUTCODE, 
+					#{item.PRODID} PRODID, 
+					#{item.USERID} USERID,
+					#{item.MARKETER} MARKETER,
+					#{item.INCENTER} INCENTER,
+					#{item.MEMO} MEMO, 
+					#{item.INPUTTYPE} INPUTTYPE ,
+					#{item.REDELIVERYNAME} RERECEIVER,
+					#{item.CNT} CNT, 
+	 				#{item.CUSTOMERCODE} CUSTOMERCODE,
+	 				#{item.DATA_STATUS} DATA_STATUS,
+	 				#{item.INPUTDATE} INPUTDATE,
+	 				#{item.WISHDATE} WISHDATE				
+	 				
+	 				 
+		</foreach>
+		A INNER JOIN BM_PROD P ON
+		<if test="PRODID != ' ' ">
+			P.ISBN = A.ISBN		
+		</if> 
+		<if test="ISBN != ' ' ">
+			P.ISBN = A.ISBN		
+		</if>
+		A.PROID=P.PRODID
+	</insert>
+	
+	<delete id="deleteWarehousing" parameterType="java.util.HashMap">
+		DELETE FROM BM_INOUT
+		WHERE INPUTCODE= #{InputCode}
+	</delete>
+	
+	<select id="selectOutPutCode" parameterType="java.util.HashMap" resultType="String">
+		SELECT 
+			ISNULL(OUTPUTCODE, '')
+		FROM
+			BM_OUTPUT
+		WHERE 
+			AUTOINPUTCODE = #{InputCode}
+	</select>
+	
+	<delete id="deleteOutput" parameterType="java.util.HashMap">
+		DELETE FROM BM_OUTPUT
+		WHERE AUTOINPUTCODE= #{InputCode}
+	</delete>
+	
+	<delete id="deleteOutputProd" parameterType="java.util.HashMap">
+		DELETE FROM BM_OUTPUTPROD
+		WHERE OUTPUTCODE= #{strOutputCode}
+	</delete>
+	
+	<delete id="deleteInOut" parameterType="java.util.HashMap">
+		DELETE FROM BM_INOUT
+		WHERE OUTPUTCODE= #{strOutputCode}
+	</delete>
+	
+	<update id="updateInout" parameterType="java.util.HashMap">
+		UPDATE 
+			BM_INOUT
+		SET	
+			PRODID = #{prodid},
+			INOUTTYPE = #{inputtype},
+			USERID = #{userid},
+			MARKETER = #{marketer},
+			INCENTER = #{incenter},
+			CUSTOMERCODE = #{customer},
+			CNT = #{inputcnt},
+			DISPERCENT = #{dispercent},
+			BUYPRICE = #{buyprice},
+			RECEIPTDATE = #{receiptDate},
+			REGDATE = #{inputdate}
+		WHERE
+			INPUTCODE = #{InputCode}
+	</update>
+	
+	<update id="updateProd" parameterType="java.util.HashMap">
+		UPDATE 
+			BM_PROD
+		SET
+			AMOUNT_REAL = AMOUNT_REAL + #{inputcnt},
+			AMOUNT_VIRTUAL = AMOUNT_VIRTUAL + #{inputcnt}
+		WHERE
+			PRODID = #{prodid} AND #{InputCode} NOT IN (SELECT INPUTCODE FROM BM_INOUT WHERE INPUTCODE IS NOT NULL)
+	</update>
+	
+	<select id="selectProdname" parameterType="java.util.HashMap" resultType="String">
+		SELECT
+			PRODNAME
+		FROM 
+			BM_PROD
+		WHERE 
+			PRODID = #{prodid}
+	</select>
+	
+	<select id="selectCustomerName" parameterType="java.util.HashMap" resultType="String">
+		SELECT
+			CUSTOM_NAME
+		FROM 
+			ERP_SVR.ERP.DBO.B_CUSTOM
+		WHERE 
+			CUSTOM_CODE = #{customer}
+	</select>
+	
+	<select id="selectGID" parameterType="java.util.HashMap" resultType="int">
+		SELECT
+			MAX(GID)
+		FROM 
+			GW_SVR.GROUPWARE.DBO.Memo_TAB
+	</select>
+	
+	<!--  
+	<insert id="insertGroupwareMemo" parameterType="java.util.HashMap">
+		INSERT INTO GW_SVR.GROUPWARE.DBO.Memo_Tab 
+			(FROMID, GID, TOID, SUBJECT, MEMO, READCODE, CTG, FILES, FromDel, ToDel, WNAME)
+		VALUES
+			(#{ADMINID}, #{GID}, #{userid}, #{SUBJECT}, #{memo}, '0', '일반', '', 0, 0, #{ADMINNAME})
+	</insert>
+	-->
+	
+	<update id="updateProd2" parameterType="java.util.HashMap">
+		UPDATE 
+			BM_PROD
+		SET
+			Amount_Real2 = Amount_Real2 + #{inputcnt},
+		WHERE
+			PRODID = #{prodid} AND #{InputCode} NOT IN (SELECT INPUTCODE FROM BM_INOUT WHERE INPUTCODE IS NOT NULL)
+	</update>
+	
+	<insert id="insertOutput" parameterType="java.util.HashMap">
+		INSERT INTO BM_OUTPUT 
+			(OUTPUTCODE, USERID, MARKETER, ZIPCODE, ADDR1, ADDR2, HP, PHONE, RECEIVER,
+			OUTCENTER, COMMENT, OUTPUTTYPE, CUSTOMERCODE, DATA_STATUS, DELIVERYTYPE, FEE, EXPECTEDDATE, AUTOINPUTCODE, REGDATE)
+		VALUES(
+			#{newOutPutCode}, #{ADMINID}, #{marketer}, '150-972', '서울 영등포구 문래동3가 55-20', '에이스하이테크시티 2동 1004호', '02-6345-6712',
+			'02-6345-6712', '북센터', '154001', '직납자동출고', '156001', #{customer}, '155003', '137003', '선불', #{inputdate}, #{InputCode}, #{inputdate})
+	</insert>
+	
+	<insert id="insertOutputProd" parameterType="java.util.HashMap">
+		INSERT INTO BM_OUTPUTPROD 
+			(OUTPUTCODE, PRODID, CNT, DATA_STATUS)
+		VALUES(
+			#{newOutPutCode}, #{prodid}, #{inputcnt}, '155003')
+	</insert>
+	
+	<insert id="insertInOut" parameterType="java.util.HashMap">
+		INSERT INTO BM_INOUT
+			(OUTPUTCODE, INOUTTYPE, USERID, MARKETER, CUSTOMERCODE, PRODID, CNT, SELLPRICE, OUTCENTER,
+			 DIRECTSEND, RECEIPTDATE, REGDATE )
+		VALUES(
+			#{newOutPutCode}, '156001', #{userid}, #{marketer}, #{customer}, #{prodid}, #{inputcnt}, #{buyprice}, '154001',
+			'Y', #{receiptDate}, #{inputdate})
+	</insert>
+	
+	<select id="selectInOut" parameterType="java.util.HashMap" resultType="int">
+		SELECT 
+			COUNT(*)
+		FROM
+			BM_INOUT
+		WHERE 
+			INPUTCODE = #{InputCode}
+	</select>
+	
+	<insert id="insertInOut2" parameterType="java.util.HashMap">
+		INSERT INTO BM_INOUT
+			(INPUTCODE, INOUTTYPE, USERID, MARKETER, CUSTOMERCODE, PRODID, CNT, DISPERCENT, BUYPRICE, INCENTER, DIRECTSEND, RECEIPTDATE)
+		VALUES(
+			#{InputCode}, #{inputtype}, #{userid}, #{marketer}, #{customer}, #{prodid}, #{inputcnt}, #{dispercent}, #{buyprice}, #{incenter},#{directsend}, #{receiptDate})
+	</insert>
+	
+	<update id="updateInOut2" parameterType="java.util.HashMap">
+		UPDATE 
+			BM_INOUT
+		SET
+			INOUTTYPE = #{inputtype}, USERID = #{userid}, MARKETER = #{marketer}, CUSTOMERCODE = #{customer}, PRODID = #{prodid}, CNT = #{inputcnt}, DISPERCENT = #{dispercent},
+			BUYPRICE = #{buyprice}, INCENTER = #{incenter}, DIRECTSEND = #{directsend}, RECEIPTDATE = #{receiptDate}, REGDATE = #{inputdate}
+		WHERE
+			INPUTCODE #{InputCode}
+	</update>
+	
+	<update id="updateTaxDate" parameterType="java.util.HashMap">
+		UPDATE 
+			BM_INOUT
+		SET
+			INOUTTYPE = #{inputtype}, RECEIPTDATE = #{receiptDate}, PRODID = #{prodid}, CNT = #{inputcnt}, REGDATE = #{inputdate}
+		WHERE
+			INPUTCODE #{InputCode}
+	</update>
+	
+	<insert id="setJongnoInout" parameterType="java.util.HashMap" >
+		INSERT INTO BM_JONGNOINOUT
+			(ISBN, AMOUNT_REAL3, WRITER, CUSTOMERNAME, INPUTDATE, TYPE)
+		VALUES(
+			#{ISBN}, #{AMOUNT_REAL3}, #{WRITER}, #{CUSTOMERNAME}, #{INPUTDATE}, #{TYPE} )
+	</insert>
+	
+	<select id="getProdid" parameterType="java.util.HashMap" resultType="String">
+		SELECT TOP 1
+			PRODID
+		FROM
+			BM_PROD
+		WHERE
+			ISBN = #{ISBN}
+		ORDER BY PRODID DESC
+	</select>
+	
+	<update id="updateProdAmountReal3" parameterType="java.util.HashMap">
+		UPDATE 
+			BM_PROD
+		SET
+			AMOUNT_REAL3 = AMOUNT_REAL3 + #{AMOUNT_REAL3}
+		WHERE
+			PRODID = #{PRODID}
+	</update>
+	
+	<select id="getJongnoInputListCount" parameterType="java.util.HashMap" resultType="Int">
+		SELECT COUNT(*)                   
+		FROM  BM_JONGNOINOUT 
+		WHERE 1 = 1
+		<include refid="warehousingJongnoWhere"></include>
+		AND TYPE = 'I'
+	</select>
+	
+	<select id="getJongnoInputList" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+		SELECT * FROM
+        (
+            SELECT                   
+                   ROW_NUMBER() OVER(ORDER BY IDX DESC) AS ROWNUM,
+                 A.ISBN,
+                 A.AMOUNT_REAL3,
+                 A.WRITER,
+                 A.CUSTOMERNAME,
+                 A.INPUTDATE,
+                 B.PRODID,
+				 B.PRODNAME
+			FROM BM_JONGNOINOUT A
+			INNER JOIN BM_PROD B ON A.ISBN = B.ISBN
+			WHERE 1 = 1
+		   <include refid="warehousingJongnoWhere"></include>
+		   AND TYPE = 'I'
+		   AND PRODID = (
+				SELECT TOP 1 PRODID
+				FROM BM_PROD
+				WHERE ISBN = A.ISBN
+				ORDER BY PRODID DESC
+			)
+        ) AS TT
+        WHERE TT.ROWNUM BETWEEN #{beginNum} AND #{endNum}
+	</select>
+	
+	<update id="updateAmountReal3" parameterType="java.util.HashMap">
+		UPDATE 
+			BM_PROD
+		SET
+			AMOUNT_REAL3 = AMOUNT_REAL3 - #{AMOUNT_REAL3}
+		WHERE
+			PRODID = #{PRODID}
+	</update>
+	
+	<select id="getJongnoOutputListCount" parameterType="java.util.HashMap" resultType="Int">
+		SELECT COUNT(*)                   
+		FROM  BM_JONGNOINOUT 
+		WHERE 1 = 1
+		<include refid="warehousingJongnoWhere"></include>
+		AND TYPE = 'O'
+	</select>
+	
+	<select id="getJongnoOutputList" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+		SELECT * FROM
+        (
+            SELECT                 
+                   ROW_NUMBER() OVER(ORDER BY IDX DESC) AS ROWNUM,
+                 A.ISBN,
+                 A.AMOUNT_REAL3,
+                 A.WRITER,
+                 A.CUSTOMERNAME,
+                 A.INPUTDATE,
+                 B.PRODID,
+				 B.PRODNAME
+			FROM BM_JONGNOINOUT A
+			INNER JOIN BM_PROD B ON A.ISBN = B.ISBN
+			WHERE 1 = 1
+		   <include refid="warehousingJongnoWhere"></include>
+		   AND TYPE = 'O'
+		   AND PRODID = (
+					SELECT TOP 1 PRODID
+					FROM BM_PROD
+					WHERE ISBN = A.ISBN
+					ORDER BY PRODID DESC
+				)
+        ) AS TT
+        WHERE TT.ROWNUM BETWEEN #{beginNum} AND #{endNum}
+	</select>
+	
+
+</mapper>
+

@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="groupWareException">
+
+	<sql id="exceptionListWhere">
+		<if test="ST_CODE != null and ST_CODE != '' ">
+			AND ST_CODE=#{ST_CODE}
+		</if>
+		<if test="EX_SYSGBN != null and EX_SYSGBN != '' ">
+			AND EX_SYSGBN=#{EX_SYSGBN} 
+		</if>
+		<if test="EX_STATUS != null and EX_STATUS != '' ">
+			AND EX_STATUS=#{EX_STATUS} 
+		</if>
+		<if test="EX_TRMSG != null and EX_TRMSG != '' ">
+			AND EX_TRMSG LIKE '%'+#{EX_TRMSG}+'%'
+		</if>	
+	</sql>	
+		
+	
+	<!-- Exception List count-->
+	<select id="selectExceptionListCount" parameterType="java.util.HashMap" resultType="int">
+		SELECT			
+			COUNT(EX_IDX) AS EXECPTCNT
+		FROM BM_EXCEPTION
+		WHERE 1=1
+		<include refid="exceptionListWhere"/> 
+	</select>
+	
+	<!-- Exception List -->
+	<select id="selectExceptionList" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+		SELECT 
+			*
+		FROM 
+		(
+			SELECT
+				ROW_NUMBER() OVER(ORDER BY EX_DT DESC, EX_STATUS ASC) AS ROWNUM
+				,EX_IDX
+				,CASE WHEN EX_SYSGBN='B' THEN (SELECT AD_NAME FROM BM_ADMIN WHERE AD_IDX=EP.MB_IDX)
+					 END AS MB_NAME
+				, MB_IDX		
+				,CASE  WHEN EX_SYSGBN='B' THEN 'BMS ADMIN'
+				 END AS ST_NAME  
+				,ST_CODE
+				,CASE WHEN EX_SYSGBN='B' THEN 'BMS' 
+				 END AS EX_SYSGBN
+				,EX_CLASS,EX_TYPE,EX_MSG,EX_TRMSG
+				,EX_IP,EX_OS,EX_BROWSER,EX_BRVER,EX_AGENT,EX_DT
+				,EX_STATUS, EX_COMMENT
+			FROM BM_EXCEPTION AS EP		
+			WHERE 1=1
+			<include refid="exceptionListWhere"/>	
+		) AS TT
+		WHERE TT.ROWNUM BETWEEN #{beginNum} AND #{endNum}
+	</select>
+
+	<!-- Exception info -->
+	<select id="selectExceptionInfo" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+		SELECT
+			EX_IDX
+			,CASE WHEN EX_SYSGBN='B' THEN (SELECT AD_NAME FROM BM_ADMIN WHERE AD_IDX=EP.MB_IDX)
+				 END AS MB_NAME
+			, MB_IDX		
+			,CASE WHEN EX_SYSGBN='B' THEN 'BMA'   
+			 END AS ST_NAME  
+			,ST_CODE
+			,CASE WHEN EX_SYSGBN='B' THEN 'BMS' 
+				 END AS EX_SYSGBN
+			,EX_CLASS,EX_TYPE,EX_MSG,EX_TRMSG
+			,EX_IP,EX_OS,EX_BROWSER,EX_BRVER,EX_AGENT,EX_DT
+			,EX_STATUS, EX_COMMENT
+		FROM BM_EXCEPTION AS EP
+		WHERE EX_IDX=#{EX_IDX}
+	</select>
+	
+	<!-- status update -->
+	<update id="updateExceptionStatus" parameterType="java.util.HashMap">
+		UPDATE BM_EXCEPTION SET 
+			EX_STATUS=#{EX_STATUS}
+		<if test="EX_COMMENT !=null and EX_COMMENT != '' " >		
+			, EX_COMMENT=#{EX_COMMENT}		
+		</if>
+		WHERE EX_IDX=#{EX_IDX}
+	</update>
+
+</mapper>

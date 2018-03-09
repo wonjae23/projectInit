@@ -1,0 +1,300 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+
+<mapper namespace="groupWareLog">
+
+	<!-- loginHis where -->
+ 	<sql id="loginHisListWhere">
+ 		<where>
+			<choose>
+				<when test="ST_CODE !=null and ST_CODE != '' ">
+					AND ST_CODE=#{ST_CODE}
+				</when>
+				<when test="MB_IDX !=null and MB_IDX != '' ">
+					AND MB_IDX=#{MB_IDX}
+				</when>
+				<when test="AH_YN !=null and AH_YN != '' ">
+					AND AH_YN=#{AH_YN} 
+				</when>
+				<when test="AH_SYSGBN !=null and AH_SYSGBN != '' ">
+					AND AH_SYSGBN=#{AH_SYSGBN}
+				</when>
+			</choose>
+		</where>
+	</sql>	
+	
+	<!-- Trace log where-->
+ 	<sql id="TraceListWhere">
+ 		<where>
+ 			<if test="TR_SYSGBN != null and TR_SYSGBN != '' ">
+ 				AND	TR_SYSGBN=#{TR_SYSGBN} 
+ 			</if>
+ 			
+			<if test="MB_IDX != null and MB_IDX != '' ">
+ 				<if test="searchHead == 'Y' ">
+ 					AND MB_IDX LIKE #{MB_IDX}+'%'
+ 				</if>
+ 				<if test="searchHead == '' and searchHead == null ">
+ 					AND MB_IDX LIKE '%'+#{MB_IDX}+'%'
+ 				</if>
+ 			</if>
+		</where>
+	</sql>
+	
+	<!-- opGrpAuth where-->
+ 	<sql id="opGrpAuthListWhere">
+ 		<where>
+ 			<if test=" AG_IDX != null and AG_IDX != '' ">
+ 				AND AG_IDX = #{AG_IDX}
+ 			</if>
+ 			<if test=" AM_IDX != null and AM_IDX != '' ">
+ 				AND AM_IDX = #{AM_IDX}
+ 			</if>
+		</where>
+	</sql>	
+	
+	<!-- Trace List count 운영자작업로그 -->
+	<select id="selectTraceListCount" parameterType="java.util.HashMap" resultType="int">
+		SELECT			
+			COUNT(TR_IDX)
+		FROM BM_TRACE
+	  	<include refid="TraceListWhere"/>
+	</select>
+	
+	<!-- Trace List 운영자작업로그  -->
+	<select id="selectTraceList" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+		SELECT
+			 BT.*
+		FROM
+		(
+			SELECT  ROW_NUMBER() OVER(ORDER BY TR_IDX DESC) AS ROWNUM 
+				, TR_IDX, TR_KEY, MB_IDX, ST_CODE
+				, TR_URL, TR_IP, TR_LOGINDT, TR_LOGOUTDT
+				, CASE WHEN TR_SYSGBN='B' THEN 'BMS'       
+				  END AS ST_NAME
+				, CASE WHEN TR_SYSGBN='B' THEN 'BMS' 
+				 END AS TR_SYSGBN
+				 , (SELECT AD_NAME FROM BM_ADMIN WHERE AD_IDX = T.MB_IDX) AS AD_NAME
+			  FROM BM_TRACE AS T
+			   <include refid="TraceListWhere"/> 
+		) AS BT
+		WHERE BT.ROWNUM BETWEEN #{beginNum} AND #{endNum}
+	</select>
+	
+	<!-- operatorLog List count 운영자관리로그 -->
+	<select id="selectOperatorLogListCount" parameterType="java.util.HashMap" resultType="int">
+		SELECT
+			COUNT(TT.AC_IDX)
+		FROM 
+		(
+			SELECT AC.AC_IDX, AC_VAL, (SELECT AD_NAME FROM BM_ADMIN WHERE AD_IDX = AC.AD_IDX) AS AD_NAME
+			FROM BM_ADMINCREATEHIS AS AC
+		) AS TT
+		<where>
+			<if test="AD_NAME != null and AD_NAME != '' ">
+				AND AD_NAME LIKE '%'+#{AD_NAME}+'%'
+			</if>
+		</where>	
+	</select>
+	
+	<!-- operatorLog List 운영자관리로그 -->
+	<select id="selectOperatorLogList" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+		SELECT
+			 TT.*
+		FROM
+		(
+			SELECT ROW_NUMBER() OVER(ORDER BY AC_DT DESC) AS ROWNUM 
+				, AC_IDX, AD_IDX, CD_CODE, AC_VAL, ADC_IDX, AC_DT
+				, (SELECT AD_NAME FROM BM_ADMIN WHERE AD_IDX = AC.AD_IDX) AS AD_NAME
+				, (SELECT CD_NAME FROM (
+											SELECT 'ADACTYPE01' CD_CODE, '관리자등록' CD_NAME UNION ALL
+											SELECT 'ADACTYPE02' CD_CODE, '관리자수정' CD_NAME UNION ALL
+											SELECT 'ADACTYPE03' CD_CODE, '관리자삭제' CD_NAME UNION ALL
+											SELECT 'ADACTYPE04' CD_CODE, '사이트변경' CD_NAME
+										) BM_CODE 
+					WHERE CD_CODE = AC.CD_CODE) AS CD_NAME
+				, (SELECT AD_NAME FROM BM_ADMIN WHERE AD_IDX = AC.ADC_IDX) AS ADC_NAME
+			  FROM BM_ADMINCREATEHIS AS AC
+		) AS TT
+		WHERE TT.ROWNUM BETWEEN #{beginNum} AND #{endNum}
+		<if test="AD_NAME != null and AD_NAME != '' ">
+			AND AD_NAME LIKE '%'+#{AD_NAME}+'%'
+		</if>		
+	</select>
+	
+	
+	
+	
+	
+	<!-- opGrpAuthLog List count 운영자그룹권한로그  -->
+	<select id="selectOpGrpAuthLogListCount" parameterType="java.util.HashMap" resultType="int">
+		SELECT
+			COUNT(AU_IDX)
+		FROM BM_ADMINGRPAUTHHIS
+		<include refid="opGrpAuthListWhere"/>  
+	</select>
+	
+	<!-- opGrpAuthLog List 운영자그룹권한로그  -->
+	<select id="selectOpGrpAuthLogList" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+		SELECT
+			 TT.*
+		FROM
+		(
+			SELECT ROW_NUMBER() OVER(ORDER BY AU_REGDT DESC) AS ROWNUM 
+				, AU_IDX, AG_IDX, AM_IDX, AA_ASIGN, AA_ENTR
+				, AA_EDIT, AA_DEL, AA_EXCL, AU_REGUSER, AU_REGDT
+				, (SELECT AG_NAME FROM BM_ADMINGROUP WHERE AG_IDX = AU.AG_IDX) AS AG_NAME
+				, (SELECT AM_NAME FROM BM_ADMINMENU WHERE AM_IDX = AU.AM_IDX) AS AM_NAME
+				, (SELECT AM_ORDER FROM BM_ADMINMENU WHERE AM_IDX = AU.AM_IDX) AS AM_ORDER
+				, (SELECT AD_NAME FROM BM_ADMIN WHERE AD_IDX = AU.AU_REGUSER) AS AU_REGUSERNM
+			  FROM BM_ADMINGRPAUTHHIS AS AU
+			 <include refid="opGrpAuthListWhere"/>  
+		) AS TT
+		WHERE TT.ROWNUM BETWEEN #{beginNum} AND #{endNum}
+		ORDER BY TT.AU_REGDT DESC, AG_IDX ASC, AM_ORDER ASC
+	</select>
+	
+	<!-- loginHis List count 로그인접속로그 -->
+	<select id="selectLoginHisListCount" parameterType="java.util.HashMap" resultType="int">
+		SELECT
+			COUNT(AH_IDX)
+		FROM BM_ADMINLOGINHIS
+		WHERE AH_SYSGBN = 'B'
+		 <include refid="loginHisListWhere"/> 
+	</select>
+	
+	<!-- loginHis List 로그인접속로그 -->
+	<select id="selectLoginHisList" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+		SELECT
+			 TT.*
+		FROM
+		(
+			SELECT ROW_NUMBER() OVER(ORDER BY AH_IDX DESC) AS ROWNUM 
+				, AH_IDX, MB_IDX, ST_CODE, AH_DT
+				, AH_IP, AH_YN, AH_ID, AH_PWD
+				, (SELECT AD_NAME FROM BM_ADMIN WHERE AD_IDX = AH.MB_IDX) AS AD_NAME
+				, CASE WHEN AH_SYSGBN='B' THEN 'BMS'
+				 END AS AH_SYSGBN
+			  FROM BM_ADMINLOGINHIS AS AH
+			  WHERE AH_SYSGBN = 'B'
+			  <include refid="loginHisListWhere"/> 
+		) AS TT
+		WHERE TT.ROWNUM BETWEEN #{beginNum} AND #{endNum}
+	</select> 
+	
+	<!-- PersonalInfoLog List count 운영자 개인정보 작업로그
+	<select id="selectPersonalInfoLogListCount" parameterType="java.util.HashMap" resultType="int">
+		SELECT
+			COUNT(*)
+		FROM
+		(
+			 SELECT B.PI_SYSGBN, B.PI_URL, AA.MB_IDX
+			          , COUNT(*) AS CNT, COUNT(*) OVER() AS TOTALCNT
+				      , ROW_NUMBER() OVER(ORDER BY B.PI_SYSGBN, COUNT(*) DESC) AS ROWNUM 
+			   FROM (
+						 SELECT A.TR_SYSGBN, A.TR_URL, A.MB_IDX
+							 , CASE WHEN CHARINDEX('?', A.COMURL) = 0 THEN A.COMURL
+										ELSE SUBSTRING(A.COMURL, 1, CHARINDEX('?', A.COMURL)-1)
+							   END AS URL
+							  , CASE WHEN A.TR_SYSGBN='A' THEN 'ADMIN'
+										WHEN A.TR_SYSGBN='T' THEN 'TUTOR'  
+										WHEN A.TR_SYSGBN='C' THEN 'COMPANY'
+										WHEN A.TR_SYSGBN='V' THEN 'CP'        
+								END AS SYSGBN
+							   ,CASE WHEN A.TR_SYSGBN = 'A' THEN B.AD_NAME 
+										WHEN A.TR_SYSGBN = 'T' THEN C.MB_NAME
+										WHEN A.TR_SYSGBN = 'C' THEN D.SA_NAME
+										WHEN A.TR_SYSGBN = 'V' THEN (SELECT F.NAME FROM GW_SVR.GROUPWARE.DBO.MEMBER_TAB F WHERE E.CA_IDX = F.MEMBERID)
+								END AS NAME
+					 FROM (
+							 SELECT TR_SYSGBN, TR_URL, MB_IDX,
+								CASE WHEN CHARINDEX('.com', TR_URL) = 0 THEN TR_URL
+									ELSE SUBSTRING(TR_URL, CHARINDEX('.com', TR_URL)+4, LEN(TR_URL)) 
+								END COMURL
+							 FROM BM_TRACE WHERE 1=1
+							  <isEmpty property="PI_STDT" prepend="AND">
+							 	<isEmpty property="PI_ENDT">
+							 	<![CDATA[ TR_LOGINDT  >= LEFT(CONVERT(DATE, GETDATE(), 23), 7) + '-01' AND TR_LOGINDT <= CONVERT(DATE, GETDATE(), 23) ]]> 	
+							 	</isEmpty>
+							 </isEmpty>
+							 <isNotEmpty property="PI_STDT" prepend="AND">
+								 <![CDATA[ TR_LOGINDT  >= #PI_STDT# ]]> 	
+								 </isNotEmpty>
+								 <isNotEmpty property="PI_ENDT" prepend="AND">
+								 <![CDATA[ TR_LOGINDT <= #PI_ENDT# ]]> 	
+							 </isNotEmpty>
+					  		 ) A
+					 		 LEFT OUTER JOIN BM_ADMIN B ON A.MB_IDX = B.AD_IDX 
+							 LEFT OUTER JOIN BM_MEMBER C ON C.MB_IDX = A.MB_IDX 
+							 LEFT OUTER JOIN BM_SITEADMIN D ON D.SA_IDX = A.MB_IDX 
+							 LEFT OUTER JOIN BM_CPADMIN E ON E.CA_IDX = A.MB_IDX
+						) AA
+				INNER JOIN BM_PERSONALINFOLOG B ON AA.URL = B.PI_URL AND AA.TR_SYSGBN = B.PI_SYSGBN
+				 <include refid="PersonalInfoLogListWhere"/>
+				GROUP BY B.PI_SYSGBN,B.PI_URL, AA.MB_IDX
+		) AS TT
+	</select> -->
+	
+	<!-- PersonalInfoLog List 운영자 개인정보 작업로그 
+	<select id="selectPersonalInfoLogList" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+		SELECT
+			(TOTALCNT-ROWNUM+1) AS NUM, TT.*
+		FROM
+		(
+			 SELECT B.PI_SYSGBN, AA.SYSGBN, B.PI_NAME,B.PI_URL, AA.MB_IDX, AA.NAME
+			          , COUNT(*) AS CNT, COUNT(*) OVER() AS TOTALCNT
+				      , ROW_NUMBER() OVER(ORDER BY B.PI_SYSGBN
+				      <isEqual property="pageName" compareValue="mb" prepend=",">
+				      	 AA.MB_IDX
+				      </isEqual>
+				      <isEqual property="pageName" compareValue="menu" prepend=",">
+				     	 B.PI_URL
+				      </isEqual>
+				      , COUNT(*) DESC) AS ROWNUM 
+			   FROM (						
+					 SELECT A.TR_SYSGBN, A.TR_URL, A.MB_IDX
+							 , CASE WHEN CHARINDEX('?', A.COMURL) = 0 THEN A.COMURL
+										ELSE SUBSTRING(A.COMURL, 1, CHARINDEX('?', A.COMURL)-1)
+							   END AS URL
+							  , CASE WHEN A.TR_SYSGBN='A' THEN 'ADMIN'
+										WHEN A.TR_SYSGBN='T' THEN 'TUTOR'  
+										WHEN A.TR_SYSGBN='C' THEN 'COMPANY'
+										WHEN A.TR_SYSGBN='V' THEN 'CP'        
+								END AS SYSGBN
+							   ,CASE WHEN A.TR_SYSGBN = 'A' THEN B.AD_NAME 
+										WHEN A.TR_SYSGBN = 'T' THEN C.MB_NAME
+										WHEN A.TR_SYSGBN = 'C' THEN D.SA_NAME
+										WHEN A.TR_SYSGBN = 'V' THEN (SELECT F.NAME FROM GW_SVR.GROUPWARE.DBO.MEMBER_TAB F WHERE E.CA_IDX = F.MEMBERID)
+								END AS NAME
+					 FROM (
+							 SELECT TR_SYSGBN, TR_URL, MB_IDX,
+								CASE WHEN CHARINDEX('.com', TR_URL) = 0 THEN TR_URL
+									ELSE SUBSTRING(TR_URL, CHARINDEX('.com', TR_URL)+4, LEN(TR_URL)) 
+								END COMURL
+							 FROM BM_TRACE WHERE 1=1
+							 <isEmpty property="PI_STDT" prepend="AND">
+							 	<isEmpty property="PI_ENDT">
+							 		<![CDATA[ TR_LOGINDT  >= LEFT(CONVERT(DATE, GETDATE(), 23), 7) + '-01' AND TR_LOGINDT <= CONVERT(DATE, GETDATE(), 23) ]]> 
+							 	</isEmpty>
+							 </isEmpty>
+							 <isNotEmpty property="PI_STDT" prepend="AND">
+							 <![CDATA[ TR_LOGINDT  >= #PI_STDT# ]]> 	
+							 </isNotEmpty>
+							 <isNotEmpty property="PI_ENDT" prepend="AND">
+							 <![CDATA[ TR_LOGINDT <= #PI_ENDT# ]]> 	
+							 </isNotEmpty>
+					  		 ) A
+					 		 LEFT OUTER JOIN BM_ADMIN B ON A.MB_IDX = B.AD_IDX 
+							 LEFT OUTER JOIN BM_MEMBER C ON C.MB_IDX = A.MB_IDX 
+							 LEFT OUTER JOIN BM_SITEADMIN D ON D.SA_IDX = A.MB_IDX 
+							 LEFT OUTER JOIN BM_CPADMIN E ON E.CA_IDX = A.MB_IDX
+						) AA
+				INNER JOIN BM_PERSONALINFOLOG B ON AA.URL = B.PI_URL AND AA.TR_SYSGBN = B.PI_SYSGBN
+				<include refid="PersonalInfoLogListWhere"/>
+				GROUP BY B.PI_SYSGBN, AA.SYSGBN,B.PI_NAME,B.PI_URL, AA.MB_IDX, AA.NAME
+		) AS TT
+		WHERE TT.ROWNUM BETWEEN #beginNum# AND #endNum#
+	</select>  -->
+
+</mapper>

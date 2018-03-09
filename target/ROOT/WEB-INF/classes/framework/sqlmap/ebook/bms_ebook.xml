@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="bmsEbook">
+	
+	<sql id="eBookListWhere">
+		<if test="EB_TITLE != null and EB_TITLE != '' ">
+			AND TITLE LIKE '%'+#{EB_TITLE}+'%'
+		</if>
+		AND DATEDIFF(D,#{sdate},REGDATE)>=0 AND DATEDIFF(D,REGDATE,#{edate})>=0
+	</sql>	
+	
+	<!-- Ebook List count-->
+	<select id="selectEbookListCount" parameterType="java.util.HashMap" resultType="int">
+		SELECT			
+			COUNT(IDX) AS EBOOKCNT
+		FROM BM_BROCHURE_TAB WITH(NOLOCK)
+		WHERE 1=1
+		  <include refid="eBookListWhere"/>   
+	</select>
+	
+	
+	
+	<!-- Ebook List -->
+	<select id="selectEbookList" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+		SELECT 
+			*
+		FROM 
+		(
+			SELECT
+				ROW_NUMBER() OVER(ORDER BY REGDATE DESC) AS ROWNUM
+				,IDX
+				,TITLE
+				,PAGENUM
+				,IMGDIR
+				,SMALLFILES
+				,COMMONFILES
+				,ZOOMFILES
+				,SOURCEFILES
+				,REGDATE
+				,USERID
+				,USERNAME
+				,MASTER.DBO.fn_DESEncrypt('BrochureID='+CAST(IDX AS VARCHAR(5))) BROIDX
+			FROM BM_BROCHURE_TAB WITH(NOLOCK)		
+			WHERE 1=1
+			<include refid="eBookListWhere"/>   
+		) AS TT
+		WHERE TT.ROWNUM BETWEEN #{beginNum} AND #{endNum}
+	</select>
+
+	<select id ="selectBrochure_original" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+		SELECT  DISTINCT PRODID,( 
+                       SELECT  CAST(BROCHURE_IDX AS VARCHAR(10)) + '; '  
+                       FROM   BM_PROD_BROCHURE_ORIGINAL WITH(NOLOCK)  
+                       WHERE   PRODID    = A.PRODID 
+                       FOR XML PATH('') 
+                       ) BROCHURE_IDX
+           FROM    BM_PROD_BROCHURE_ORIGINAL A WITH(NOLOCK) WHERE PRODID= #{PRODIDNUM}
+	</select>
+	
+	<select id ="selectBrochure_sample" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+	    SELECT  DISTINCT PRODID,( 
+                       SELECT  CAST(BROCHURE_IDX AS VARCHAR(10)) + '; '  
+                       FROM   BM_PROD_BROCHURE_SAMPLE WITH(NOLOCK)
+                       WHERE   PRODID    = A.PRODID 
+                       FOR XML PATH('') 
+                       ) BROCHURE_IDX
+           FROM  BM_PROD_BROCHURE_SAMPLE A WITH(NOLOCK) WHERE PRODID= #{PRODIDNUM}
+
+	</select>
+	
+	<delete id="deleteBrochure_sample" parameterType="java.util.HashMap">
+	DELETE FROM BM_PROD_BROCHURE_SAMPLE WHERE PRODID = #{PRODIDNUM}
+	</delete>
+	<delete id="deleteBrochure_original" parameterType="java.util.HashMap">
+		 DELETE FROM BM_PROD_BROCHURE_ORIGINAL WHERE PRODID = #{PRODIDNUM}
+	</delete>
+	
+	
+	<insert id="insertBrochure_sample" parameterType="java.util.HashMap">
+		INSERT INTO BM_PROD_BROCHURE_SAMPLE (PRODID,BROCHURE_IDX)
+		<foreach collection="sampleidxs" item="item" separator=" union all " index="index">
+			SELECT #{PRODIDNUM},#{item}
+		</foreach>
+	
+	</insert>
+	<insert id="insertBrochure_original" parameterType="java.util.HashMap">
+		INSERT INTO BM_PROD_BROCHURE_ORIGINAL (PRODID,BROCHURE_IDX)
+		<foreach collection="originalidxs" item="item" separator=" union all " index = "index">
+			SELECT #{PRODIDNUM},#{item}
+		</foreach>
+	
+	</insert>
+	
+		
+	
+</mapper>
